@@ -493,14 +493,19 @@ fi
 
 # ── Step 15: Firewall ──────────────────────────────────────────────────────────
 section "Firewall"
-ufw --force reset -q
-ufw default deny incoming  -q
-ufw default allow outgoing -q
-ufw allow ssh              -q
-ufw allow 80/tcp           -q
-ufw allow 443/tcp          -q
-ufw --force enable         -q
-success "UFW firewall configured"
+if command -v ufw &>/dev/null; then
+    ufw --force reset
+    ufw default deny incoming
+    ufw default allow outgoing
+    ufw allow ssh
+    ufw allow 80/tcp
+    ufw allow 443/tcp
+    ufw --force enable
+    success "UFW firewall configured"
+else
+    warn "UFW not found — skipping firewall setup"
+    info "Install manually later: apt-get install -y ufw"
+fi
 
 # ── Step 16: fail2ban ──────────────────────────────────────────────────────────
 section "fail2ban"
