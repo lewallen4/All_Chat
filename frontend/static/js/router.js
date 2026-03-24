@@ -28,9 +28,9 @@ const Router = (() => {
     }
 
     // Reset admin padding override when leaving admin
-    const main = document.getElementById('mainContent');
-    if (main && _current === '/admin') {
-      main.style.padding = '';
+    const adminMain = document.getElementById('mainContent');
+    if (adminMain && _current === '/admin') {
+      adminMain.style.padding = '';
     }
 
     const [path, queryStr] = fullPath.split('?');
