@@ -93,9 +93,15 @@ const Social = (() => {
 
     const bell = document.createElement('div');
     bell.style.position = 'relative';
+    // SVG bell — inherits currentColor so it matches the font color
+    const bellSvg = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+      <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+    </svg>`;
     bell.innerHTML = `
       <button class="btn-icon" id="notifBell" title="Notifications" aria-label="Notifications">
-        🔔
+        ${bellSvg}
         <span id="notifDot" style="display:none;position:absolute;top:2px;right:2px;
           width:8px;height:8px;background:var(--accent);border-radius:50%;border:2px solid var(--bg-surface);">
         </span>
@@ -195,48 +201,57 @@ const Social = (() => {
   async function renderComments(postId, containerId) {
     const container = document.getElementById(containerId);
     if (!container) return;
-
     container.innerHTML = '<div class="view-loading" style="padding:1.5rem"><div class="spinner"></div></div>';
 
     try {
       const comments = await API.get(`/social/comments/${postId}`);
       container.innerHTML = '';
 
-      if (comments.length === 0) {
-        container.innerHTML = `<p style="color:var(--text-muted);font-size:0.875rem;padding:0.75rem 0">No comments yet. Be the first!</p>`;
-      } else {
-        comments.forEach(c => container.appendChild(buildCommentEl(c, postId)));
-      }
-
-      // Add comment form at top
+      // Compose box at top
       if (Auth.isLoggedIn()) {
-        const form = document.createElement('div');
-        form.style.cssText = 'margin-bottom:1.25rem;display:flex;gap:0.5rem;align-items:flex-start;';
-        form.innerHTML = `
-          ${UI.avatarEl(Auth.getUser(), 32)}
+        const me = Auth.getUser();
+        const compose = document.createElement('div');
+        compose.className = 'comment-compose';
+        compose.innerHTML = `
+          ${UI.avatarEl(me, 32)}
           <div style="flex:1;">
-            <textarea id="newCommentBody-${postId}" class="w-full" rows="2"
-              placeholder="Add a comment…" style="resize:vertical;min-height:60px;"></textarea>
-            <button class="btn btn-primary btn-sm mt-1" id="submitComment-${postId}">Comment</button>
+            <textarea id="newCommentBody-${postId}" placeholder="Write a comment…"
+              rows="2" style="width:100%;"></textarea>
+            <div style="margin-top:0.4rem;text-align:right;">
+              <button class="btn btn-primary btn-sm" id="submitComment-${postId}">Post Comment</button>
+            </div>
           </div>`;
-        container.insertBefore(form, container.firstChild);
+        container.appendChild(compose);
 
         document.getElementById(`submitComment-${postId}`)?.addEventListener('click', async () => {
-          const body = document.getElementById(`newCommentBody-${postId}`)?.value.trim();
+          const textarea = document.getElementById(`newCommentBody-${postId}`);
+          const body = textarea?.value.trim();
           if (!body) return;
+          const btn = document.getElementById(`submitComment-${postId}`);
+          btn.disabled = true; btn.textContent = 'Posting…';
           try {
-            const comment = await API.post('/social/comments', { post_id: parseInt(postId), body });
-            document.getElementById(`newCommentBody-${postId}`).value = '';
-            // Prepend new comment
-            const newEl = buildCommentEl(comment, postId);
-            const firstComment = container.querySelector('.comment-item');
-            if (firstComment) container.insertBefore(newEl, firstComment);
-            else container.appendChild(newEl);
+            const c = await API.post('/social/comments', { post_id: parseInt(postId), body });
+            textarea.value = '';
+            const listEl = document.getElementById(`commentList-${postId}`);
+            if (listEl) listEl.prepend(buildCommentTree(c, postId, 0));
+            // Update count
+            const countEl = document.getElementById(`commentCount-${postId}`);
+            if (countEl) countEl.textContent = parseInt(countEl.textContent || 0) + 1;
             UI.toast('Comment posted!', 'success');
-          } catch (e) {
-            UI.toast(e.detail || 'Comment failed', 'error');
-          }
+          } catch (e) { UI.toast(e.detail || 'Failed', 'error'); }
+          finally { btn.disabled = false; btn.textContent = 'Post Comment'; }
         });
+      }
+
+      // Comment list
+      const listEl = document.createElement('div');
+      listEl.id = `commentList-${postId}`;
+      container.appendChild(listEl);
+
+      if (comments.length === 0) {
+        listEl.innerHTML = `<p style="color:var(--text-muted);font-size:0.875rem;padding:1rem 0">No comments yet. Be the first!</p>`;
+      } else {
+        comments.forEach(c => listEl.appendChild(buildCommentTree(c, postId, 0)));
       }
 
     } catch (e) {
@@ -244,92 +259,149 @@ const Social = (() => {
     }
   }
 
-  function buildCommentEl(comment, postId, isReply = false) {
+  // Build a comment node at a given depth (max 3 levels: 0, 1, 2)
+  function buildCommentTree(comment, postId, depth) {
     const el = document.createElement('div');
     el.className = 'comment-item';
-    el.style.cssText = `display:flex;gap:0.6rem;margin-bottom:0.85rem;
-      ${isReply ? 'margin-left:2.5rem;padding-left:0.75rem;border-left:2px solid var(--border);' : ''}`;
+    el.dataset.commentId = comment.id;
 
-    const canDelete = Auth.isLoggedIn() && Auth.getUser()?.username === comment.author.username;
+    const isDeleted = comment.is_deleted;
+    const canDelete = !isDeleted && Auth.isLoggedIn() &&
+                      (Auth.getUser()?.username === comment.author?.username || Auth.getUser()?.is_admin);
+    const canReply  = Auth.isLoggedIn() && !isDeleted && depth < 2;
+    const upClass   = comment.user_vote === 1  ? 'upvoted'   : '';
+    const downClass = comment.user_vote === -1 ? 'downvoted' : '';
+    const score     = (comment.upvotes || 0) - (comment.downvotes || 0);
 
     el.innerHTML = `
-      <div style="flex-shrink:0;margin-top:2px">${UI.avatarEl(comment.author, 28)}</div>
-      <div style="flex:1;min-width:0;">
-        <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.2rem;">
-          <a href="/u/${UI.escapeAttr(comment.author.username)}" data-route="/u/${UI.escapeAttr(comment.author.username)}"
-            style="font-weight:600;font-size:0.85rem;color:var(--accent)">
-            ${UI.escapeHtml(comment.author.username)}
-          </a>
-          <span style="font-size:0.75rem;color:var(--text-muted)">${UI.relativeTime(comment.created_at)}</span>
-          ${canDelete ? `<button class="btn-icon delete-comment" data-id="${comment.id}" style="font-size:0.7rem;margin-left:auto;opacity:0.5">🗑</button>` : ''}
-        </div>
-        <div style="font-size:0.875rem;color:var(--text-secondary);line-height:1.55;word-break:break-word;">
-          ${UI.escapeHtml(comment.body)}
-        </div>
-        <div style="display:flex;align-items:center;gap:0.75rem;margin-top:0.4rem;">
-          <button class="btn-icon" style="font-size:0.75rem;color:var(--text-muted)"
-            data-cid="${comment.id}" data-val="1">▲ ${comment.upvotes}</button>
-          <button class="btn-icon" style="font-size:0.75rem;color:var(--text-muted)"
-            data-cid="${comment.id}" data-val="-1">▼</button>
-          ${Auth.isLoggedIn() && !isReply
-            ? `<button class="reply-btn btn-icon" style="font-size:0.75rem;color:var(--text-muted)"
-                data-cid="${comment.id}">↩ Reply</button>` : ''}
-        </div>
-        <div class="reply-form-${comment.id}" style="display:none;margin-top:0.5rem;"></div>
-        <div class="replies-${comment.id}"></div>
+      <div style="flex-shrink:0;margin-top:2px;">
+        ${isDeleted ? '<div style="width:28px;height:28px;border-radius:50%;background:var(--bg-elevated);"></div>'
+          : UI.avatarEl(comment.author, 28)}
       </div>
-    `;
+      <div class="comment-body-wrap">
+        <div class="comment-meta">
+          ${isDeleted
+            ? '<span style="color:var(--text-muted);font-style:italic;">deleted</span>'
+            : `<a class="comment-author" href="/u/${UI.escapeAttr(comment.author.username)}"
+                data-route="/u/${UI.escapeAttr(comment.author.username)}">
+                ${UI.escapeHtml(comment.author.username)}</a>`}
+          <span class="comment-time">${UI.relativeTime(comment.created_at)}</span>
+          ${canDelete ? `<button class="btn-icon" style="margin-left:auto;font-size:0.7rem;color:var(--text-muted);"
+              data-action="delete-comment" data-cid="${comment.id}">🗑</button>` : ''}
+        </div>
+        <div class="comment-bubble ${isDeleted ? 'deleted' : ''}">
+          ${isDeleted ? '[deleted]' : UI.escapeHtml(comment.body)}
+        </div>
+        ${!isDeleted ? `
+        <div class="comment-actions">
+          <button class="comment-vote-btn ${upClass}" data-action="vote-comment"
+            data-cid="${comment.id}" data-val="1" id="cvUp-${comment.id}">
+            ▲ <span id="cvScore-${comment.id}">${score >= 0 ? '+' + score : score}</span>
+          </button>
+          <button class="comment-vote-btn ${downClass}" data-action="vote-comment"
+            data-cid="${comment.id}" data-val="-1" id="cvDown-${comment.id}">▼</button>
+          ${canReply
+            ? `<button class="reply-toggle-btn" data-action="toggle-reply"
+                data-cid="${comment.id}">↩ Reply</button>`
+            : ''}
+        </div>
+        <div id="replyForm-${comment.id}" style="display:none;" class="reply-form">
+          ${UI.avatarEl(Auth.getUser() || {username:'?'}, 24)}
+          <div style="flex:1;">
+            <textarea id="replyText-${comment.id}" placeholder="Write a reply…" rows="2"></textarea>
+            <div style="margin-top:0.3rem;display:flex;gap:0.4rem;">
+              <button class="btn btn-primary btn-sm" data-action="submit-reply"
+                data-cid="${comment.id}" data-postid="${postId}">Reply</button>
+              <button class="btn btn-ghost btn-sm" data-action="cancel-reply"
+                data-cid="${comment.id}">Cancel</button>
+            </div>
+          </div>
+        </div>` : ''}
+        <div id="replies-${comment.id}" class="replies-container" ${(!comment.replies?.length) ? 'style="display:none"' : ''}></div>
+      </div>`;
 
-    // Delete
-    el.querySelector('.delete-comment')?.addEventListener('click', async () => {
-      if (!confirm('Delete this comment?')) return;
-      await API.delete(`/social/comments/${comment.id}`);
-      el.remove();
-      UI.toast('Comment deleted', 'success');
-    });
+    // Bind events
+    el.querySelectorAll('[data-action]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const action = btn.dataset.action;
+        const cid    = btn.dataset.cid;
 
-    // Vote
-    el.querySelectorAll('[data-cid]').forEach(btn => {
-      if (btn.classList.contains('reply-btn')) return;
-      btn.addEventListener('click', async () => {
-        try {
-          await API.post(`/social/comments/${btn.dataset.cid}/vote?value=${btn.dataset.val}`);
-        } catch (e) { UI.toast(e.detail || 'Vote failed', 'error'); }
+        if (action === 'delete-comment') {
+          if (!confirm('Delete this comment?')) return;
+          API.delete(`/social/comments/${cid}`).then(() => {
+            el.remove();
+            UI.toast('Comment deleted', 'success');
+          }).catch(e => UI.toast(e.detail || 'Failed', 'error'));
+        }
+
+        if (action === 'vote-comment') {
+          if (!Auth.isLoggedIn()) { UI.toast('Log in to vote', 'info'); return; }
+          API.post(`/social/comments/${cid}/vote?value=${btn.dataset.val}`)
+            .then(res => {
+              const scoreEl = document.getElementById(`cvScore-${cid}`);
+              const upBtn   = document.getElementById(`cvUp-${cid}`);
+              const downBtn = document.getElementById(`cvDown-${cid}`);
+              if (scoreEl) {
+                const s = (res.upvotes || 0) - (res.downvotes || 0);
+                scoreEl.textContent = s >= 0 ? '+' + s : s;
+              }
+              upBtn?.classList.toggle('upvoted',   res.user_vote === 1);
+              downBtn?.classList.toggle('downvoted', res.user_vote === -1);
+              upBtn?.classList.toggle('upvoted',   false);
+              downBtn?.classList.toggle('downvoted', false);
+              if (res.user_vote === 1)  upBtn?.classList.add('upvoted');
+              if (res.user_vote === -1) downBtn?.classList.add('downvoted');
+            }).catch(e => UI.toast(e.detail || 'Vote failed', 'error'));
+        }
+
+        if (action === 'toggle-reply') {
+          const form = document.getElementById(`replyForm-${cid}`);
+          if (form) {
+            const open = form.style.display === 'none';
+            form.style.display = open ? 'flex' : 'none';
+            if (open) document.getElementById(`replyText-${cid}`)?.focus();
+          }
+        }
+
+        if (action === 'cancel-reply') {
+          const form = document.getElementById(`replyForm-${cid}`);
+          if (form) form.style.display = 'none';
+          const ta = document.getElementById(`replyText-${cid}`);
+          if (ta) ta.value = '';
+        }
+
+        if (action === 'submit-reply') {
+          const body = document.getElementById(`replyText-${cid}`)?.value.trim();
+          if (!body) return;
+          btn.disabled = true; btn.textContent = 'Posting…';
+          API.post('/social/comments', {
+            post_id:   parseInt(btn.dataset.postid),
+            body,
+            parent_id: parseInt(cid),
+          }).then(reply => {
+            const repliesEl = document.getElementById(`replies-${cid}`);
+            if (repliesEl) {
+              repliesEl.style.display = '';
+              repliesEl.appendChild(buildCommentTree(reply, postId, depth + 1));
+            }
+            const form = document.getElementById(`replyForm-${cid}`);
+            if (form) form.style.display = 'none';
+            const ta = document.getElementById(`replyText-${cid}`);
+            if (ta) ta.value = '';
+            UI.toast('Reply posted!', 'success');
+          }).catch(e => UI.toast(e.detail || 'Failed', 'error'))
+            .finally(() => { btn.disabled = false; btn.textContent = 'Reply'; });
+        }
       });
     });
 
-    // Reply
-    el.querySelector('.reply-btn')?.addEventListener('click', () => {
-      const rf = el.querySelector(`.reply-form-${comment.id}`);
-      rf.style.display = rf.style.display === 'none' ? 'block' : 'none';
-      if (rf.style.display === 'block' && !rf.innerHTML) {
-        rf.innerHTML = `
-          <div style="display:flex;gap:0.4rem">
-            <textarea style="flex:1;resize:vertical;min-height:52px;" rows="2"
-              id="replyBody-${comment.id}" placeholder="Write a reply…"></textarea>
-            <button class="btn btn-primary btn-sm" id="sendReply-${comment.id}">Reply</button>
-          </div>`;
-        document.getElementById(`sendReply-${comment.id}`)?.addEventListener('click', async () => {
-          const body = document.getElementById(`replyBody-${comment.id}`)?.value.trim();
-          if (!body) return;
-          try {
-            const reply = await API.post('/social/comments', {
-              post_id: parseInt(postId), body, parent_id: comment.id
-            });
-            const repliesContainer = el.querySelector(`.replies-${comment.id}`);
-            repliesContainer?.appendChild(buildCommentEl(reply, postId, true));
-            rf.style.display = 'none';
-            rf.innerHTML = '';
-            UI.toast('Reply posted!', 'success');
-          } catch (e) { UI.toast(e.detail || 'Reply failed', 'error'); }
-        });
-      }
-    });
-
     // Render existing replies
-    if (comment.replies?.length > 0) {
-      const repliesContainer = el.querySelector(`.replies-${comment.id}`);
-      comment.replies.forEach(r => repliesContainer?.appendChild(buildCommentEl(r, postId, true)));
+    if (comment.replies?.length > 0 && depth < 2) {
+      const repliesEl = el.querySelector(`#replies-${comment.id}`);
+      if (repliesEl) {
+        comment.replies.forEach(r => repliesEl.appendChild(buildCommentTree(r, postId, depth + 1)));
+      }
     }
 
     return el;

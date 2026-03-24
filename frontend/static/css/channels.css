@@ -368,3 +368,217 @@
   .channel-header-body { flex-direction: column; align-items: flex-start; }
   .channel-header-actions { padding-top: 0; }
 }
+
+/* ── Watch button ────────────────────────────────────────────── */
+.btn-watch {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.85rem;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.btn-watch:hover {
+  border-color: var(--gold);
+  color: var(--gold);
+  background: var(--gold-soft);
+}
+.btn-watch.watching {
+  border-color: var(--gold);
+  background: var(--gold-soft);
+  color: var(--gold);
+}
+.btn-watch.watching:hover {
+  border-color: var(--danger);
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
+/* ── Feed watch toggle ───────────────────────────────────────── */
+.feed-watch-toggle {
+  display: flex;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 3px;
+  gap: 2px;
+  margin-left: auto;
+}
+.feed-watch-btn {
+  padding: 0.3rem 0.85rem;
+  border-radius: 7px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+  white-space: nowrap;
+}
+.feed-watch-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+.feed-watch-btn.active { background: var(--gold); color: var(--bg-base); }
+
+/* ── Channel directory watch filter ─────────────────────────── */
+.channel-dir-filter {
+  display: flex;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 3px;
+  gap: 2px;
+}
+.channel-dir-btn {
+  padding: 0.35rem 0.85rem;
+  border-radius: 7px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.channel-dir-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+.channel-dir-btn.active { background: var(--accent); color: #fff; }
+
+/* ── Channel stats emoji fix (use text color) ────────────────── */
+.channel-stats,
+.channel-card-footer {
+  -webkit-text-fill-color: currentColor;
+}
+
+/* ── Comment section ─────────────────────────────────────────── */
+.comments-section {
+  margin-top: 1.5rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--border);
+}
+.comments-title {
+  font-family: 'Syne', sans-serif;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 1rem;
+}
+.comment-item {
+  display: flex;
+  gap: 0.65rem;
+  margin-bottom: 0.85rem;
+}
+.comment-body-wrap { flex: 1; min-width: 0; }
+.comment-bubble {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: 0 12px 12px 12px;
+  padding: 0.6rem 0.9rem;
+  font-size: 0.875rem;
+  color: var(--text-primary);
+  line-height: 1.55;
+  word-break: break-word;
+}
+.comment-bubble.deleted { color: var(--text-muted); font-style: italic; }
+.comment-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.3rem;
+  font-size: 0.78rem;
+  flex-wrap: wrap;
+}
+.comment-author {
+  font-weight: 700;
+  color: var(--accent);
+  text-decoration: none;
+}
+.comment-author:hover { text-decoration: underline; }
+.comment-time { color: var(--text-muted); }
+.comment-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.3rem;
+}
+.comment-vote-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  padding: 0.15rem 0.3rem;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  transition: color 0.1s, background 0.1s;
+  font-family: inherit;
+  font-weight: 600;
+}
+.comment-vote-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+.comment-vote-btn.upvoted   { color: var(--upvote); }
+.comment-vote-btn.downvoted { color: var(--downvote); }
+.reply-toggle-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  padding: 0.15rem 0.3rem;
+  border-radius: 4px;
+  font-family: inherit;
+  font-weight: 600;
+  transition: color 0.1s;
+}
+.reply-toggle-btn:hover { color: var(--accent); }
+
+/* Reply thread indent */
+.replies-container {
+  margin-left: 1.5rem;
+  margin-top: 0.5rem;
+  padding-left: 0.75rem;
+  border-left: 2px solid var(--border);
+}
+
+/* Inline reply form */
+.reply-form {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+  align-items: flex-start;
+}
+.reply-form textarea {
+  flex: 1;
+  min-height: 52px;
+  resize: vertical;
+  font-size: 0.85rem;
+  padding: 0.45rem 0.7rem;
+}
+
+/* Comment compose */
+.comment-compose {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+  margin-bottom: 1.25rem;
+  padding: 0.85rem;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.comment-compose textarea {
+  flex: 1;
+  min-height: 60px;
+  resize: vertical;
+  border-radius: 8px;
+}

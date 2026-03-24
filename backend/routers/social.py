@@ -312,12 +312,12 @@ async def get_comments(
     db: AsyncSession = Depends(get_db),
     current_user: Optional[User] = Depends(get_current_user_optional),
 ):
-    # Top-level comments only; replies are nested
+    """Top-level comments with nested replies (2 levels)."""
     result = await db.execute(
         select(Comment)
         .where(Comment.post_id == post_id, Comment.parent_id == None)
         .order_by(desc(Comment.wilson_score), desc(Comment.created_at))
-        .limit(100)
+        .limit(200)
     )
     comments = result.scalars().all()
     out = []
@@ -381,13 +381,14 @@ async def delete_comment(
     return {"message": "Comment deleted."}
 
 
-@router.post("/comments/{comment_id}/vote", response_model=MessageOut)
+@router.post("/comments/{comment_id}/vote", response_model=dict)
 async def vote_comment(
     comment_id: int,
     value: int,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    from models.comment_vote import CommentVote
     if value not in (1, -1):
         raise HTTPException(400, "Vote value must be +1 or -1.")
     r = await db.execute(select(Comment).where(Comment.id == comment_id))
@@ -397,12 +398,47 @@ async def vote_comment(
     if comment.author_id == current_user.id:
         raise HTTPException(403, "Cannot vote on your own comment.")
 
-    if value == 1:
-        comment.upvotes += 1
+    existing_r = await db.execute(
+        select(CommentVote).where(
+            CommentVote.user_id    == current_user.id,
+            CommentVote.comment_id == comment_id,
+        )
+    )
+    existing = existing_r.scalar_one_or_none()
+    user_vote: Optional[int]
+
+    if existing:
+        if existing.value == value:
+            # Toggle off
+            if existing.value == 1: comment.upvotes   = max(0, comment.upvotes - 1)
+            else:                   comment.downvotes  = max(0, comment.downvotes - 1)
+            await db.delete(existing)
+            user_vote = None
+        else:
+            # Switch direction
+            if existing.value == 1:
+                comment.upvotes   = max(0, comment.upvotes - 1)
+                comment.downvotes = comment.downvotes + 1
+            else:
+                comment.downvotes = max(0, comment.downvotes - 1)
+                comment.upvotes   = comment.upvotes + 1
+            existing.value = value
+            user_vote = value
     else:
-        comment.downvotes += 1
+        db.add(CommentVote(user_id=current_user.id, comment_id=comment_id, value=value))
+        if value == 1: comment.upvotes   += 1
+        else:          comment.downvotes += 1
+        user_vote = value
+
     comment.wilson_score = wilson_score_lower_bound(comment.upvotes, comment.downvotes)
-    return {"message": "Vote recorded."}
+    await db.flush()
+    return {
+        "comment_id":   comment_id,
+        "upvotes":      comment.upvotes,
+        "downvotes":    comment.downvotes,
+        "wilson_score": comment.wilson_score,
+        "user_vote":    user_vote,
+    }
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -417,23 +453,38 @@ async def _get_user(db: AsyncSession, username: str) -> User:
 
 
 async def _build_comment(db: AsyncSession, c: Comment, current_user: Optional[User]) -> CommentResponse:
+    from models.comment_vote import CommentVote
+
+    async def get_user_vote(comment_id: int) -> Optional[int]:
+        if not current_user:
+            return None
+        vr = await db.execute(
+            select(CommentVote.value).where(
+                CommentVote.user_id    == current_user.id,
+                CommentVote.comment_id == comment_id,
+            )
+        )
+        return vr.scalar_one_or_none()
+
     replies = []
     if c.replies:
         for reply in sorted(c.replies, key=lambda r: r.created_at):
-            if not reply.is_deleted or reply.replies:
-                await db.refresh(reply, ["author"])
-                replies.append(CommentResponse(
-                    id=reply.id, post_id=reply.post_id, author=reply.author,
-                    body=reply.body if not reply.is_deleted else "[deleted]",
-                    parent_id=reply.parent_id, upvotes=reply.upvotes, downvotes=reply.downvotes,
-                    wilson_score=reply.wilson_score, created_at=reply.created_at,
-                    is_deleted=reply.is_deleted,
-                ))
+            await db.refresh(reply, ["author"])
+            reply_vote = await get_user_vote(reply.id)
+            replies.append(CommentResponse(
+                id=reply.id, post_id=reply.post_id, author=reply.author,
+                body=reply.body if not reply.is_deleted else "[deleted]",
+                parent_id=reply.parent_id, upvotes=reply.upvotes, downvotes=reply.downvotes,
+                wilson_score=reply.wilson_score, created_at=reply.created_at,
+                is_deleted=reply.is_deleted, user_vote=reply_vote,
+            ))
+
+    user_vote = await get_user_vote(c.id)
 
     return CommentResponse(
         id=c.id, post_id=c.post_id, author=c.author,
         body=c.body if not c.is_deleted else "[deleted]",
         parent_id=c.parent_id, upvotes=c.upvotes, downvotes=c.downvotes,
         wilson_score=c.wilson_score, created_at=c.created_at,
-        is_deleted=c.is_deleted, replies=replies,
+        is_deleted=c.is_deleted, user_vote=user_vote, replies=replies,
     )

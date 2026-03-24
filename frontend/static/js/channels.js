@@ -41,7 +41,12 @@ const Channels = (() => {
       <div style="max-width:900px;margin:0 auto;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem;flex-wrap:wrap;gap:0.75rem;">
           <h2 style="font-family:'Syne',sans-serif;font-size:1.4rem;font-weight:800;">Channels</h2>
-          <div style="display:flex;gap:0.5rem;align-items:center;">
+          <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
+            ${Auth.isLoggedIn() ? `
+              <div class="channel-dir-filter">
+                <button class="channel-dir-btn active" id="dirAllBtn">All</button>
+                <button class="channel-dir-btn" id="dirWatchedBtn">⊹ Watched</button>
+              </div>` : ''}
             <div class="nav-search" style="max-width:220px;">
               <span class="search-icon">⌕</span>
               <input type="search" id="channelSearchInput" placeholder="Find a channel…" autocomplete="off" />
@@ -59,7 +64,7 @@ const Channels = (() => {
   }
 
   async function bindDirectoryView() {
-    let page = 1, q = '';
+    let page = 1, q = '', watchedOnly = false;
     let debounce;
 
     document.getElementById('channelSearchInput')?.addEventListener('input', e => {
@@ -69,12 +74,44 @@ const Channels = (() => {
     document.getElementById('channelLoadMore')?.addEventListener('click', () => { page++; fetchChannels(false); });
     document.getElementById('createChannelBtn')?.addEventListener('click', showCreateModal);
 
+    document.getElementById('dirAllBtn')?.addEventListener('click', () => {
+      watchedOnly = false; page = 1;
+      document.getElementById('dirAllBtn')?.classList.add('active');
+      document.getElementById('dirWatchedBtn')?.classList.remove('active');
+      fetchChannels(true);
+    });
+    document.getElementById('dirWatchedBtn')?.addEventListener('click', async () => {
+      watchedOnly = true; page = 1;
+      document.getElementById('dirWatchedBtn')?.classList.add('active');
+      document.getElementById('dirAllBtn')?.classList.remove('active');
+      fetchChannels(true);
+    });
+
     async function fetchChannels(replace) {
       const grid = document.getElementById('channelsGrid');
       if (!grid) return;
       if (replace) grid.innerHTML = '<div class="view-loading" style="grid-column:1/-1"><div class="spinner" style="margin:auto"></div></div>';
       try {
-        const data = await API.get(`/channels?page=${page}&q=${encodeURIComponent(q)}`);
+        let data;
+        if (watchedOnly && Auth.isLoggedIn()) {
+          // Get watched channel IDs then filter
+          const allData = await API.get(`/channels?page=1&q=${encodeURIComponent(q)}`);
+          // Filter to watched ones client-side (small list)
+          const watchStatuses = await Promise.all(
+            allData.channels.map(ch =>
+              API.get(`/channels/${ch.slug}/watch/status`)
+                .then(s => s.watching ? ch : null)
+                .catch(() => null)
+            )
+          );
+          data = {
+            channels: watchStatuses.filter(Boolean),
+            total: watchStatuses.filter(Boolean).length,
+            has_more: false,
+          };
+        } else {
+          data = await API.get(`/channels?page=${page}&q=${encodeURIComponent(q)}`);
+        }
         if (replace) grid.innerHTML = '';
         if (!data.channels.length && replace) {
           grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1">
@@ -118,8 +155,8 @@ const Channels = (() => {
         </div>
       </div>
       <div class="channel-card-footer">
-        <span>👥 ${ch.member_count.toLocaleString()} members</span>
-        <span>📋 ${ch.post_count.toLocaleString()} posts</span>
+        <span> ${ch.member_count.toLocaleString()} members</span>
+        <span> ${ch.post_count.toLocaleString()} posts</span>
         ${ch.is_private ? '<span class="channel-pill pill-private">🔒 Private</span>' : ''}
         ${ch.is_locked  ? '<span class="channel-pill pill-locked">🔐 Locked</span>'  : ''}
         ${ch.viewer_role ? roleBadge(ch.viewer_role, ch.viewer_title) : ''}
@@ -229,8 +266,12 @@ const Channels = (() => {
   function bindChannelPage(ch, isMember, isLead, isAdmin) {
     const slug = ch.slug;
 
-    // Action buttons
+    // Watch button (separate from membership)
     const actionsEl = document.getElementById('channelActions');
+    if (actionsEl && Auth.isLoggedIn()) {
+      _renderWatchBtn(ch.slug, actionsEl);
+    }
+
     if (actionsEl) {
       if (isMember && ch.viewer_role !== 'chief_lead') {
         const leaveBtn = document.createElement('button');
@@ -431,6 +472,26 @@ const Channels = (() => {
         <input type="checkbox" id="editChLocked" ${ch.is_locked ? 'checked' : ''} />
         Lock channel (no new posts)
       </label>
+      <div style="border-top:1px solid var(--border);margin:1rem 0;padding-top:1rem;">
+        <div style="font-size:0.8rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;
+          letter-spacing:0.05em;margin-bottom:0.75rem;">Media</div>
+        <div style="display:flex;gap:0.75rem;flex-wrap:wrap;">
+          <div>
+            <label style="display:block;font-size:0.8rem;margin-bottom:0.3rem;">
+              Channel Avatar <span style="color:var(--text-muted);font-weight:400">(max 200×200px, 5MB)</span>
+            </label>
+            <input type="file" id="editChAvatar" accept="image/jpeg,image/png,image/webp"
+              style="font-size:0.8rem;" />
+          </div>
+          <div>
+            <label style="display:block;font-size:0.8rem;margin-bottom:0.3rem;">
+              Banner Image <span style="color:var(--text-muted);font-weight:400">(500×100px landscape, 5MB)</span>
+            </label>
+            <input type="file" id="editChBanner" accept="image/jpeg,image/png,image/webp"
+              style="font-size:0.8rem;" />
+          </div>
+        </div>
+      </div>
       <div style="display:flex;gap:0.5rem;justify-content:flex-end;">
         <button class="btn btn-ghost" onclick="UI.closeModal()">Cancel</button>
         <button class="btn btn-primary" id="editChSave">Save Changes</button>
@@ -692,6 +753,34 @@ const Channels = (() => {
 
   function adminBadge() {
     return `<span class="role-badge role-admin">⚡ Admin</span>`;
+  }
+
+  async function _renderWatchBtn(slug, container) {
+    try {
+      const status  = await API.get(`/channels/${encodeURIComponent(slug)}/watch/status`);
+      const btn     = document.createElement('button');
+      btn.className = `btn-watch ${status.watching ? 'watching' : ''}`;
+      btn.innerHTML = status.watching ? '⊹ Watching' : '⊹ Watch';
+      btn.title     = status.watching ? 'Click to unwatch' : 'Watch this channel';
+      btn.addEventListener('click', async () => {
+        try {
+          if (status.watching) {
+            await API.delete(`/channels/${slug}/watch`);
+            status.watching   = false;
+            btn.className     = 'btn-watch';
+            btn.innerHTML     = '⊹ Watch';
+            UI.toast(`Unwatched #${slug}`, 'info');
+          } else {
+            await API.post(`/channels/${slug}/watch`);
+            status.watching   = true;
+            btn.className     = 'btn-watch watching';
+            btn.innerHTML     = '⊹ Watching';
+            UI.toast(`Now watching #${slug}!`, 'success');
+          }
+        } catch (e) { UI.toast(e.detail || e.message, 'error'); }
+      });
+      container.prepend(btn);
+    } catch {}
   }
 
   return {

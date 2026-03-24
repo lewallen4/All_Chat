@@ -7,3 +7,5 @@ from models.follow import Follow
 from models.bookmark import Bookmark
 from models.comment import Comment
 from models.channel import Channel, ChannelMembership
+from models.channel_watch import ChannelWatch
+from models.comment_vote import CommentVote

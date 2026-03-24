@@ -42,8 +42,10 @@ img { max-width: 100%; display: block; }
 h1, h2, h3, h4, h5 {
   font-family: 'Syne', sans-serif;
   font-weight: 700;
-  line-height: 1.2;
+  line-height: 1.35;
   color: var(--text-primary);
+  overflow: visible;
+  padding-bottom: 0.05em;
 }
 h1 { font-size: clamp(1.6rem, 3vw, 2.4rem); }
 h2 { font-size: clamp(1.3rem, 2.5vw, 1.9rem); }
@@ -119,14 +121,17 @@ code {
 }
 .search-icon {
   position: absolute;
-  left: 0.75rem;
+  left: 0.7rem;
+  top: 50%;
+  transform: translateY(-50%);
   color: var(--text-muted);
-  font-size: 1.1rem;
+  font-size: 1rem;
   pointer-events: none;
+  line-height: 1;
 }
 .nav-search input {
   width: 100%;
-  padding: 0.45rem 1rem 0.45rem 2.25rem;
+  padding: 0.45rem 1rem 0.45rem 2.5rem;
   background: var(--bg-input);
   border: 1px solid var(--border);
   border-radius: 8px;

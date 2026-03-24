@@ -26,6 +26,8 @@ import models.follow        # noqa: F401
 import models.bookmark      # noqa: F401
 import models.comment       # noqa: F401
 import models.channel       # noqa: F401
+import models.channel_watch  # noqa: F401
+import models.comment_vote   # noqa: F401
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

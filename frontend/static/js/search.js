@@ -38,7 +38,10 @@ const Search = (() => {
       _debounce = setTimeout(() => runSearch(input.value.trim()), 350);
     });
 
-    input.focus();
+    // Only auto-focus if no query — avoids mobile keyboard issues
+    if (!initialQuery) {
+      setTimeout(() => input.focus(), 100);
+    }
     if (initialQuery) runSearch(initialQuery);
   }
 
@@ -56,12 +59,17 @@ const Search = (() => {
     const container = document.getElementById('searchResults');
     if (!container) return;
 
-    if (!query || query.length < 2) {
+    // Strip dangerous chars
+    const safeQuery = query.replace(/[&|!<>()\\:*]/g, ' ').trim();
+
+    if (!safeQuery || safeQuery.length < 2) {
       container.innerHTML = renderEmptyPrompt();
       return;
     }
 
     container.innerHTML = '<div class="view-loading"><div class="spinner"></div></div>';
+    // Use sanitised query for actual request
+    query = safeQuery;
 
     try {
       const res = await API.get(`/search?q=${encodeURIComponent(query)}&page=1`);

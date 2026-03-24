@@ -12,6 +12,8 @@ const Feed = (() => {
 
   // ── Render Feed View ───────────────────────────────────────────
 
+  let _watchedOnly = false;
+
   function renderView() {
     return `
       <div class="feed-controls">
@@ -27,9 +29,13 @@ const Feed = (() => {
           <option value="year" ${_period==='year'?'selected':''}>This year</option>
           <option value="all"  ${_period==='all'?'selected':''}>All time</option>
         </select>
-        ${Auth.isLoggedIn()
-          ? `<a href="/submit" data-route="/submit" class="btn btn-primary btn-sm" style="margin-left:auto">✚ Post</a>`
-          : ''}
+        ${Auth.isLoggedIn() ? `
+          <div class="feed-watch-toggle">
+            <button class="feed-watch-btn ${!_watchedOnly?'active':''}" id="feedAllBtn">All</button>
+            <button class="feed-watch-btn ${_watchedOnly?'active':''}"  id="feedWatchedBtn">⊹ Watched</button>
+          </div>
+          <a href="/submit" data-route="/submit" class="btn btn-primary btn-sm">✚ Post</a>
+        ` : ''}
       </div>
       <div class="feed-list" id="feedList">
         <div class="view-loading"><div class="spinner"></div></div>
@@ -63,6 +69,20 @@ const Feed = (() => {
       if (_hasMore && !_loading) { _page++; loadFeed(false); }
     });
 
+    // Watched toggle
+    document.getElementById('feedAllBtn')?.addEventListener('click', () => {
+      _watchedOnly = false; _page = 1;
+      document.getElementById('feedAllBtn')?.classList.add('active');
+      document.getElementById('feedWatchedBtn')?.classList.remove('active');
+      loadFeed(true);
+    });
+    document.getElementById('feedWatchedBtn')?.addEventListener('click', () => {
+      _watchedOnly = true; _page = 1;
+      document.getElementById('feedWatchedBtn')?.classList.add('active');
+      document.getElementById('feedAllBtn')?.classList.remove('active');
+      loadFeed(true);
+    });
+
     loadFeed(true);
   }
 
@@ -77,8 +97,14 @@ const Feed = (() => {
     if (replace) list.innerHTML = '<div class="view-loading"><div class="spinner"></div></div>';
 
     try {
-      const params = new URLSearchParams({ sort: _sort, period: _period, page: _page });
-      const data   = await API.get(`/feed?${params}`);
+      let data;
+      if (_watchedOnly && Auth.isLoggedIn()) {
+        const params = new URLSearchParams({ sort: _sort, period: _period, page: _page });
+        data = await API.get(`/channels/watched/feed?${params}`);
+      } else {
+        const params = new URLSearchParams({ sort: _sort, period: _period, page: _page });
+        data = await API.get(`/feed?${params}`);
+      }
 
       if (replace) list.innerHTML = '';
 
@@ -176,6 +202,14 @@ const Feed = (() => {
         </div>
         ${contentHtml}
         <div class="post-actions">
+          <button class="btn-icon comment-toggle-btn" data-post-id="${post.id}"
+            title="Comments" style="font-size:0.8rem;color:var(--text-muted);gap:0.25rem;">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            </svg>
+            Comments
+          </button>
           ${Auth.isLoggedIn()
             ? `<button class="btn-icon bookmark-btn" data-post-id="${post.id}" title="Bookmark" aria-label="Bookmark">⊹</button>`
             : ''}
@@ -186,9 +220,19 @@ const Feed = (() => {
       </div>
     `;
 
+    // Comment toggle button
+    el.querySelector('.comment-toggle-btn')?.addEventListener('click', () => {
+      _toggleComments(post.id, el);
+    });
+
     // Bookmark
     el.querySelector('.bookmark-btn')?.addEventListener('click', (e) => {
       Social.toggleBookmark(post.id, e.currentTarget);
+    });
+
+    // Click title to expand comments inline
+    el.querySelector('.post-title')?.addEventListener('click', () => {
+      _toggleComments(post.id, el);
     });
 
     // Vote buttons
@@ -247,6 +291,26 @@ const Feed = (() => {
     } catch (e) {
       UI.toast(e.detail || 'Delete failed', 'error');
     }
+  }
+
+  function _toggleComments(postId, cardEl) {
+    // Check if comments already open
+    const existing = cardEl.querySelector('.post-comments-section');
+    if (existing) { existing.remove(); return; }
+
+    const section = document.createElement('div');
+    section.className = 'post-comments-section';
+    section.style.cssText = 'padding:1rem 1.25rem 0.5rem;border-top:1px solid var(--border-subtle);';
+    const countEl = document.createElement('div');
+    countEl.style.cssText = 'font-size:0.8rem;font-weight:700;color:var(--text-muted);margin-bottom:0.75rem;';
+    countEl.innerHTML = `<span id="commentCount-${postId}">0</span> comments`;
+    const commentsEl = document.createElement('div');
+    commentsEl.id = `comments-${postId}`;
+    section.appendChild(countEl);
+    section.appendChild(commentsEl);
+    cardEl.querySelector('.post-body').appendChild(section);
+
+    Social.renderComments(postId, `comments-${postId}`);
   }
 
   return { renderView, bindView, createPostCard, castVote };

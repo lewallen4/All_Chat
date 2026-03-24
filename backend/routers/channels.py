@@ -735,7 +735,7 @@ async def upload_channel_avatar(
     ms = await _get_membership(db, ch.id, current_user.id)
     _require_perm(ms, LeadPermission.CAN_EDIT_CHANNEL, current_user, "edit channel avatar")
 
-    path = await _save_channel_image(file, "avatars", 200)
+    path = await _save_channel_image(file, "avatars", max_width=200, max_height=200)
     if ch.avatar_path:
         _delete_media_file(ch.avatar_path)
     ch.avatar_path = path
@@ -754,7 +754,7 @@ async def upload_channel_banner(
     ms = await _get_membership(db, ch.id, current_user.id)
     _require_perm(ms, LeadPermission.CAN_EDIT_CHANNEL, current_user, "edit channel banner")
 
-    path = await _save_channel_image(file, "banners", 1920)
+    path = await _save_channel_image(file, "banners", 500, max_height=100)
     if ch.banner_path:
         _delete_media_file(ch.banner_path)
     ch.banner_path = path
@@ -762,7 +762,8 @@ async def upload_channel_banner(
     return {"message": "Channel banner updated."}
 
 
-async def _save_channel_image(file: UploadFile, subdir: str, max_dim: int) -> str:
+async def _save_channel_image(file: UploadFile, subdir: str,
+                               max_width: int = 500, max_height: int = 500) -> str:
     allowed = {"image/jpeg", "image/png", "image/webp"}
     if file.content_type not in allowed:
         raise HTTPException(400, "Only JPEG, PNG, or WebP images allowed.")
@@ -773,8 +774,8 @@ async def _save_channel_image(file: UploadFile, subdir: str, max_dim: int) -> st
         img = Image.open(io.BytesIO(content))
         img.verify()
         img = Image.open(io.BytesIO(content))
-        if img.width > max_dim or img.height > max_dim:
-            img.thumbnail((max_dim, max_dim), Image.LANCZOS)
+        if img.width > max_width or img.height > max_height:
+            img.thumbnail((max_width, max_height), Image.LANCZOS)
         buf = io.BytesIO()
         img.convert("RGB").save(buf, format="WEBP", quality=88)
         buf.seek(0)
@@ -857,3 +858,140 @@ def _build_post_response(post: Post, user_vote: Optional[int]) -> dict:
         "is_pinned": post.is_pinned,
         "removed_by_lead": post.removed_by_lead,
     }
+
+
+# ══ Channel Watch (subscribe) ════════════════════════════════════════════════
+
+@router.post("/{slug}/watch", response_model=MessageOut)
+async def watch_channel(
+    slug:         str,
+    current_user: User = Depends(get_current_user),
+    db:           AsyncSession = Depends(get_db),
+):
+    """Watch a channel — its posts appear in your Watched feed."""
+    from models.channel_watch import ChannelWatch
+    ch = await _get_channel(db, slug)
+
+    existing = await db.execute(
+        select(ChannelWatch).where(
+            ChannelWatch.user_id    == current_user.id,
+            ChannelWatch.channel_id == ch.id,
+        )
+    )
+    if existing.scalar_one_or_none():
+        return {"message": f"Already watching #{ch.slug}."}
+
+    db.add(ChannelWatch(user_id=current_user.id, channel_id=ch.id))
+    await db.flush()
+    return {"message": f"Now watching #{ch.slug}!"}
+
+
+@router.delete("/{slug}/watch", response_model=MessageOut)
+async def unwatch_channel(
+    slug:         str,
+    current_user: User = Depends(get_current_user),
+    db:           AsyncSession = Depends(get_db),
+):
+    """Unwatch a channel."""
+    from models.channel_watch import ChannelWatch
+    ch = await _get_channel(db, slug)
+
+    result = await db.execute(
+        select(ChannelWatch).where(
+            ChannelWatch.user_id    == current_user.id,
+            ChannelWatch.channel_id == ch.id,
+        )
+    )
+    watch = result.scalar_one_or_none()
+    if not watch:
+        return {"message": f"Not watching #{ch.slug}."}
+
+    await db.delete(watch)
+    await db.flush()
+    return {"message": f"Unwatched #{ch.slug}."}
+
+
+@router.get("/{slug}/watch/status")
+async def watch_status(
+    slug:         str,
+    current_user: User = Depends(get_current_user),
+    db:           AsyncSession = Depends(get_db),
+):
+    from models.channel_watch import ChannelWatch
+    ch = await _get_channel(db, slug)
+    result = await db.execute(
+        select(ChannelWatch).where(
+            ChannelWatch.user_id    == current_user.id,
+            ChannelWatch.channel_id == ch.id,
+        )
+    )
+    return {"watching": result.scalar_one_or_none() is not None}
+
+
+@router.get("/watched/feed", response_model=dict)
+async def watched_feed(
+    sort:   str = Query("new", pattern="^(new|top|hot)$"),
+    period: str = Query("all", pattern="^(24h|week|month|year|all)$"),
+    page:   int = Query(1, ge=1),
+    current_user: User = Depends(get_current_user),
+    db:           AsyncSession = Depends(get_db),
+):
+    """Feed of posts from channels the user is watching."""
+    from models.channel_watch import ChannelWatch
+    from datetime import timedelta
+
+    # Get watched channel IDs
+    watched_r = await db.execute(
+        select(ChannelWatch.channel_id).where(ChannelWatch.user_id == current_user.id)
+    )
+    channel_ids = [r[0] for r in watched_r.all()]
+
+    if not channel_ids:
+        return {"posts": [], "total": 0, "page": page, "has_more": False,
+                "message": "You're not watching any channels yet."}
+
+    page_size = 25
+    offset    = (page - 1) * page_size
+    now       = datetime.now(timezone.utc)
+
+    time_filters = {
+        "24h":   timedelta(hours=24),
+        "week":  timedelta(weeks=1),
+        "month": timedelta(days=30),
+        "year":  timedelta(days=365),
+    }
+
+    q = select(Post).where(Post.channel_id.in_(channel_ids), Post.is_deleted == False)
+    if period in time_filters:
+        q = q.where(Post.created_at >= now - time_filters[period])
+
+    if sort == "new":   q = q.order_by(Post.is_pinned.desc(), desc(Post.created_at))
+    elif sort == "top": q = q.order_by(Post.is_pinned.desc(), desc(Post.wilson_score), desc(Post.created_at))
+    elif sort == "hot": q = q.order_by(Post.is_pinned.desc(), desc(Post.wilson_score), desc(Post.upvotes), desc(Post.created_at))
+
+    total_r = await db.execute(
+        select(func.count()).select_from(
+            select(Post).where(Post.channel_id.in_(channel_ids), Post.is_deleted == False).subquery()
+        )
+    )
+    total   = total_r.scalar() or 0
+    result  = await db.execute(q.offset(offset).limit(page_size))
+    posts   = result.scalars().all()
+
+    out = []
+    for p in posts:
+        await db.refresh(p, ["author"])
+        uv = None
+        vr = await db.execute(select(Vote.value).where(Vote.user_id == current_user.id, Vote.post_id == p.id))
+        uv = vr.scalar_one_or_none()
+
+        ch_r = await db.execute(select(Channel).where(Channel.id == p.channel_id))
+        ch   = ch_r.scalar_one_or_none()
+        ch_info = {"slug": ch.slug, "name": ch.name, "avatar_path": ch.avatar_path} if ch else None
+
+        out.append(_build_post_response(p, uv))
+        if ch_info:
+            out[-1]["channel"] = ch_info
+
+    return {"posts": out, "total": total, "page": page,
+            "has_more": (offset + len(posts)) < total}

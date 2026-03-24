@@ -58,12 +58,12 @@
 /* ── Light Theme ──────────────────────────────────────────────── */
 [data-theme="light"] {
   /* Base surfaces */
-  --bg-base:        #faf8f2;
-  --bg-surface:     #ffffff;
-  --bg-elevated:    #f5f2ea;
-  --bg-hover:       #ece9df;
-  --bg-active:      #e4e0d4;
-  --bg-input:       #ffffff;
+  --bg-base:        #FDFBCF;
+  --bg-surface:     #FEFCE8;
+  --bg-elevated:    #FBF8C0;
+  --bg-hover:       #F5F2A8;
+  --bg-active:      #EDEA90;
+  --bg-input:       #FEFCE8;
 
   /* Borders */
   --border:         #e0dbd0;
@@ -101,8 +101,8 @@
   --shadow-glow:    0 0 20px rgba(124, 58, 237, 0.12);
 
   /* Scrollbar */
-  --scrollbar-track: #f0ece2;
-  --scrollbar-thumb: #ccc7bc;
+  --scrollbar-track: #FDFBCF;
+  --scrollbar-thumb: #d4d080;
 }
 
 /* ── Theme transition ──────────────────────────────────────────── */
