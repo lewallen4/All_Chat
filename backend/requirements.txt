@@ -1,25 +1,27 @@
-# All_Chat - Python Dependencies
-# Pin major versions for reproducibility; update deliberately.
+# All_Chat — Python Dependencies
 
 # Web framework
 fastapi==0.115.5
 uvicorn[standard]==0.32.1
-python-multipart==0.0.12       # form/file upload parsing
+python-multipart==0.0.12
 
 # Database
 sqlalchemy==2.0.36
-asyncpg==0.30.0                # async PostgreSQL driver
-alembic==1.14.0                # database migrations
+asyncpg==0.30.0
+alembic==1.14.0
+
+# greenlet — required by SQLAlchemy async (must be explicit)
+greenlet>=3.0.0
 
 # Cache / rate limiting
 redis==5.2.0
 
 # Auth & security
-python-jose[cryptography]==3.3.0   # JWT
-argon2-cffi==23.1.0                # Argon2id password hashing
-bleach==6.2.0                      # HTML sanitization
-pydantic[email]==2.10.2            # request validation
-pydantic-settings==2.6.1           # settings from env
+python-jose[cryptography]==3.3.0
+argon2-cffi==23.1.0
+bleach==6.2.0
+pydantic[email]==2.10.2
+pydantic-settings==2.6.1
 
 # Email
 aiosmtplib==3.0.2
@@ -30,13 +32,13 @@ Pillow==11.0.0
 # HTTP client (link previews)
 httpx==0.28.0
 beautifulsoup4==4.12.3
-lxml==5.3.0                        # fast BS4 parser
+lxml==5.3.0
 
 # Cryptography
-cryptography==43.0.3               # AES-GCM, X25519
-
-# Post-quantum (optional — install separately if liboqs is available)
-# liboqs-python==0.11.0            # Kyber-768; requires liboqs C library
+cryptography==43.0.3
 
 # Config
 python-dotenv==1.0.1
+
+# Post-quantum (optional — requires liboqs C library)
+# liboqs-python==0.11.0
