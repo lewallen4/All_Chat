@@ -351,7 +351,59 @@ python3 -m venv "$APP_DIR/venv"
 "$APP_DIR/venv/bin/pip" install -r "$APP_DIR/backend/requirements.txt" -q
 success "Python dependencies installed"
 
-# ── Step 10: Generate .env ─────────────────────────────────────────────────────
+# ── Step 10: Post-Quantum Cryptography (liboqs + Kyber-768) ──────────────────
+section "Post-Quantum Cryptography"
+info "Building liboqs (Kyber-768 ML-KEM) — this takes 5-10 minutes..."
+
+PQ_SUCCESS=false
+
+# Install build deps
+apt-get install -y -qq cmake ninja-build libssl-dev 2>/dev/null || true
+
+# Clone and build liboqs C library
+cd /tmp
+rm -rf liboqs_build
+git clone --depth 1 https://github.com/open-quantum-safe/liboqs.git liboqs_build 2>/dev/null
+if [[ -d /tmp/liboqs_build ]]; then
+    cd /tmp/liboqs_build
+    mkdir -p build && cd build
+    cmake -GNinja         -DCMAKE_INSTALL_PREFIX=/usr/local         -DBUILD_SHARED_LIBS=ON         -DOQS_USE_OPENSSL=ON         .. -Wno-dev > /tmp/liboqs_cmake.log 2>&1
+
+    if ninja > /tmp/liboqs_ninja.log 2>&1; then
+        ninja install >> /tmp/liboqs_ninja.log 2>&1
+        ldconfig
+
+        # Install matching Python bindings
+        "$APP_DIR/venv/bin/pip" install --upgrade liboqs-python -q
+
+        # Verify it works
+        PQ_TEST=$(sudo -u "$APP_USER" "$APP_DIR/venv/bin/python" -c "
+import oqs
+kem = oqs.KeyEncapsulation('Kyber768')
+pub = kem.generate_keypair()
+ct, ss1 = kem.encap_secret(pub)
+ss2 = kem.decap_secret(ct)
+print('ok' if ss1 == ss2 else 'fail')
+" 2>/dev/null || echo "fail")
+
+        if [[ "$PQ_TEST" == "ok" ]]; then
+            PQ_SUCCESS=true
+            success "Kyber-768 (ML-KEM) post-quantum crypto active ✓"
+        else
+            warn "liboqs installed but verification failed — falling back to X25519"
+        fi
+    else
+        warn "liboqs build failed — falling back to X25519"
+        warn "Check /tmp/liboqs_ninja.log for details"
+    fi
+else
+    warn "Could not clone liboqs — falling back to X25519"
+    warn "Install manually later: see README.md PQ section"
+fi
+
+cd /tmp
+
+# ── Step 11: Generate .env ─────────────────────────────────────────────────────
 section "Environment Configuration"
 SECRET_KEY=$(openssl rand -hex 64)
 ORIGIN_PREFIX="http"
@@ -383,7 +435,7 @@ REFRESH_TOKEN_EXPIRE_DAYS=30
 EMAIL_VERIFY_EXPIRE_HOURS=24
 PASSWORD_RESET_EXPIRE_HOURS=2
 
-PQ_ENABLED=false
+PQ_ENABLED=${PQ_SUCCESS}
 ENV
 
 chmod 640 "$APP_DIR/backend/.env"
@@ -402,7 +454,7 @@ SECRETS
 chmod 600 /root/.allchat_secrets
 success "Credentials saved to /root/.allchat_secrets"
 
-# ── Step 11: Swap file ─────────────────────────────────────────────────────────
+# ── Step 12: Swap file ─────────────────────────────────────────────────────────
 section "Swap"
 if [[ ! -f /swapfile ]]; then
     fallocate -l 1G /swapfile 2>/dev/null || dd if=/dev/zero of=/swapfile bs=1M count=1024 status=none
@@ -415,7 +467,7 @@ else
     info "Swap already exists"
 fi
 
-# ── Step 12: Permissions ───────────────────────────────────────────────────────
+# ── Step 13: Permissions ───────────────────────────────────────────────────────
 section "Permissions"
 chown -R "$APP_USER:$APP_USER" "$APP_DIR"
 chmod -R 750 "$APP_DIR"
@@ -428,7 +480,7 @@ chmod -R 770 "$APP_DIR/media"
 chmod 640    "$APP_DIR/backend/.env"
 success "Permissions set"
 
-# ── Step 13: Database tables ───────────────────────────────────────────────────
+# ── Step 14: Database tables ───────────────────────────────────────────────────
 section "Database Tables"
 info "Creating tables (this may take a moment)..."
 
@@ -475,7 +527,7 @@ CREATE TRIGGER post_search_vector_update
 PSQL
 success "Full-text search trigger installed"
 
-# ── Step 14: Systemd service ───────────────────────────────────────────────────
+# ── Step 15: App Service ───────────────────────────────────────────────────
 section "App Service"
 cp "$SCRIPT_DIR/systemd/allchat.service" /etc/systemd/system/allchat.service
 systemctl daemon-reload
@@ -491,7 +543,7 @@ else
     exit 1
 fi
 
-# ── Step 15: Firewall ──────────────────────────────────────────────────────────
+# ── Step 16: Firewall ──────────────────────────────────────────────────────────
 section "Firewall"
 if command -v ufw &>/dev/null; then
     ufw --force reset
@@ -507,7 +559,7 @@ else
     info "Install manually later: apt-get install -y ufw"
 fi
 
-# ── Step 16: fail2ban ──────────────────────────────────────────────────────────
+# ── Step 17: fail2ban ──────────────────────────────────────────────────────────
 section "fail2ban"
 cat > /etc/fail2ban/jail.d/allchat.conf << 'F2B'
 [nginx-limit-req]
@@ -531,11 +583,11 @@ systemctl enable fail2ban --now
 systemctl restart fail2ban
 success "fail2ban configured"
 
-# ── Step 17: Reload nginx ──────────────────────────────────────────────────────
+# ── Step 18: Reload nginx ──────────────────────────────────────────────────────
 nginx -t && systemctl reload nginx
 success "Nginx reloaded"
 
-# ── Step 18: Verify app is responding ─────────────────────────────────────────
+# ── Step 19: Verify app is responding ─────────────────────────────────────────
 section "Verification"
 info "Testing app response..."
 sleep 2
@@ -548,7 +600,7 @@ else
     info "App responded with HTTP $HTTP_CODE (may be normal)"
 fi
 
-# ── Step 19: Create admin account ─────────────────────────────────────────────
+# ── Step 20: Create admin account account ─────────────────────────────────────────────
 section "Admin Account"
 echo ""
 echo -e "  ${BOLD}Now let's create your admin account.${NC}"
@@ -557,7 +609,7 @@ echo -e "  This account will have full access to the admin dashboard.\n"
 cd /tmp
 sudo -u "$APP_USER" "$APP_DIR/venv/bin/python" "$APP_DIR/scripts/create_admin.py"
 
-# ── Step 20: Send test email ───────────────────────────────────────────────────
+# ── Step 21: Send test email email ───────────────────────────────────────────────────
 section "Email Test"
 echo ""
 ask "Send a test email to verify SMTP is working? (y/n)"
