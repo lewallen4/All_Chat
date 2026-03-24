@@ -1,0 +1,111 @@
+/* ═══════════════════════════════════════════════════════════════
+   All_Chat — Theme Variables
+   Dark:  deep navy/purple with yellow & violet accents
+   Light: warm vanilla with muted color accents
+═══════════════════════════════════════════════════════════════ */
+
+/* ── Dark Theme (default) ─────────────────────────────────────── */
+:root,
+[data-theme="dark"] {
+  /* Base surfaces */
+  --bg-base:        #0b0b14;
+  --bg-surface:     #13131f;
+  --bg-elevated:    #1c1c2e;
+  --bg-hover:       #222236;
+  --bg-active:      #2a2a45;
+  --bg-input:       #16162a;
+
+  /* Borders */
+  --border:         #2a2a45;
+  --border-subtle:  #1e1e30;
+  --border-focus:   #7c3aed;
+
+  /* Text */
+  --text-primary:   #e8e4ff;
+  --text-secondary: #9b94c4;
+  --text-muted:     #5c5680;
+  --text-inverse:   #0b0b14;
+
+  /* Brand / Accent */
+  --accent:         #7c3aed;       /* violet */
+  --accent-hover:   #6d28d9;
+  --accent-soft:    rgba(124, 58, 237, 0.15);
+  --accent-glow:    rgba(124, 58, 237, 0.3);
+  --gold:           #f5c542;       /* yellow-gold highlight */
+  --gold-soft:      rgba(245, 197, 66, 0.12);
+  --danger:         #ef4444;
+  --danger-soft:    rgba(239, 68, 68, 0.12);
+  --success:        #22c55e;
+  --success-soft:   rgba(34, 197, 94, 0.12);
+  --warning:        #f59e0b;
+
+  /* Upvote / downvote */
+  --upvote:         #f5c542;
+  --downvote:       #7c3aed;
+  --vote-neutral:   #5c5680;
+
+  /* Shadows */
+  --shadow-sm:      0 1px 3px rgba(0,0,0,0.4);
+  --shadow-md:      0 4px 16px rgba(0,0,0,0.5);
+  --shadow-lg:      0 8px 40px rgba(0,0,0,0.6);
+  --shadow-glow:    0 0 24px var(--accent-glow);
+
+  /* Scrollbar */
+  --scrollbar-track: #13131f;
+  --scrollbar-thumb: #2a2a45;
+}
+
+/* ── Light Theme ──────────────────────────────────────────────── */
+[data-theme="light"] {
+  /* Base surfaces */
+  --bg-base:        #faf8f2;
+  --bg-surface:     #ffffff;
+  --bg-elevated:    #f5f2ea;
+  --bg-hover:       #ece9df;
+  --bg-active:      #e4e0d4;
+  --bg-input:       #ffffff;
+
+  /* Borders */
+  --border:         #e0dbd0;
+  --border-subtle:  #ede9df;
+  --border-focus:   #9b6ef3;
+
+  /* Text */
+  --text-primary:   #1a1620;
+  --text-secondary: #5a5268;
+  --text-muted:     #9490a4;
+  --text-inverse:   #ffffff;
+
+  /* Brand / Accent */
+  --accent:         #7c3aed;
+  --accent-hover:   #6d28d9;
+  --accent-soft:    rgba(124, 58, 237, 0.08);
+  --accent-glow:    rgba(124, 58, 237, 0.15);
+  --gold:           #c97d10;
+  --gold-soft:      rgba(201, 125, 16, 0.08);
+  --danger:         #dc2626;
+  --danger-soft:    rgba(220, 38, 38, 0.08);
+  --success:        #16a34a;
+  --success-soft:   rgba(22, 163, 74, 0.08);
+  --warning:        #d97706;
+
+  /* Upvote / downvote */
+  --upvote:         #c97d10;
+  --downvote:       #7c3aed;
+  --vote-neutral:   #9490a4;
+
+  /* Shadows */
+  --shadow-sm:      0 1px 3px rgba(0,0,0,0.08);
+  --shadow-md:      0 4px 16px rgba(0,0,0,0.1);
+  --shadow-lg:      0 8px 40px rgba(0,0,0,0.12);
+  --shadow-glow:    0 0 20px rgba(124, 58, 237, 0.12);
+
+  /* Scrollbar */
+  --scrollbar-track: #f0ece2;
+  --scrollbar-thumb: #ccc7bc;
+}
+
+/* ── Theme transition ──────────────────────────────────────────── */
+*, *::before, *::after {
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.15s ease;
+}

@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="All_Chat — open conversation, encrypted by default." />
+  <title>All_Chat</title>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+  <link rel="stylesheet" href="/static/css/main.css" />
+  <link rel="stylesheet" href="/static/css/components.css" />
+  <link rel="stylesheet" href="/static/css/themes.css" />
+  <link rel="stylesheet" href="/static/css/admin.css" />
+  <link rel="stylesheet" href="/static/css/channels.css" />
+</head>
+<body>
+
+<!-- ── Top Navigation ────────────────────────────────────────────────── -->
+<nav class="topnav" id="topnav">
+  <div class="nav-inner">
+    <a class="nav-logo" href="/" data-route="/">
+      <span class="logo-mark">⬡</span>
+      <span class="logo-text">all_chat</span>
+    </a>
+
+    <div class="nav-search-wrap">
+      <form class="nav-search" id="searchForm" autocomplete="off">
+        <span class="search-icon">⌕</span>
+        <input
+          type="search"
+          id="searchInput"
+          placeholder="search posts, people…"
+          maxlength="100"
+          autocomplete="off"
+          spellcheck="false"
+        />
+      </form>
+    </div>
+
+    <div class="nav-actions">
+      <button class="btn-icon theme-toggle" id="themeToggle" title="Toggle theme" aria-label="Toggle light/dark mode">
+        <span class="theme-icon">◐</span>
+      </button>
+      <div id="navAuthArea">
+        <!-- Injected by JS: login/register or user menu -->
+      </div>
+    </div>
+  </div>
+</nav>
+
+<!-- ── App Shell ─────────────────────────────────────────────────────── -->
+<div class="app-shell">
+
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <nav class="sidebar-nav">
+      <a class="snav-item" href="/" data-route="/" data-icon="⊞">Feed</a>
+      <a class="snav-item" href="/search" data-route="/search" data-icon="⌕">Search</a>
+      <a class="snav-item auth-only hidden" href="/messages" data-route="/messages" data-icon="✉">
+        Messages
+        <span class="badge" id="msgBadge" style="display:none"></span>
+      </a>
+      <a class="snav-item" href="/channels" data-route="/channels" data-icon="⬡">Channels</a>
+      <a class="snav-item admin-only hidden" href="/admin" data-route="/admin" data-icon="◈">Admin</a>
+      <a class="snav-item auth-only hidden" href="/following" data-route="/following" data-icon="✦">Following</a>
+      <a class="snav-item auth-only hidden" href="/bookmarks" data-route="/bookmarks" data-icon="⊹">Bookmarks</a>
+      <a class="snav-item auth-only hidden" href="/submit" data-route="/submit" data-icon="✚">New Post</a>
+      <a class="snav-item auth-only hidden" href="/profile" data-route="/profile" data-icon="◉">Profile</a>
+    </nav>
+    <div class="sidebar-meta">
+      <span class="version-tag">v1.0.0</span>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="main-content" id="mainContent">
+    <!-- Views are injected here by the router -->
+    <div class="view-loading" id="viewLoading">
+      <div class="spinner"></div>
+    </div>
+  </main>
+
+</div>
+
+<!-- ── Toasts ─────────────────────────────────────────────────────────── -->
+<div class="toast-container" id="toastContainer" aria-live="polite"></div>
+
+<!-- ── Modal ─────────────────────────────────────────────────────────── -->
+<div class="modal-overlay hidden" id="modalOverlay" role="dialog" aria-modal="true">
+  <div class="modal-box" id="modalBox">
+    <button class="modal-close" id="modalClose" aria-label="Close">✕</button>
+    <div id="modalContent"></div>
+  </div>
+</div>
+
+<!-- ── Scripts ───────────────────────────────────────────────────────── -->
+<script src="/static/js/api.js"></script>
+<script src="/static/js/auth.js"></script>
+<script src="/static/js/crypto.js"></script>
+<script src="/static/js/ui.js"></script>
+<script src="/static/js/feed.js"></script>
+<script src="/static/js/post.js"></script>
+<script src="/static/js/messages.js"></script>
+<script src="/static/js/profile.js"></script>
+<script src="/static/js/search.js"></script>
+<script src="/static/js/social.js"></script>
+<script src="/static/js/channels.js"></script>
+<script src="/static/js/admin.js"></script>
+<script src="/static/js/router.js"></script>
+<script src="/static/js/app.js"></script>
+
+</body>
+</html>

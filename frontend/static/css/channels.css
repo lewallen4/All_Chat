@@ -1,0 +1,370 @@
+/* ═══════════════════════════════════════════════════════════════
+   All_Chat — Channels Stylesheet
+═══════════════════════════════════════════════════════════════ */
+
+/* ── Channel Badge (on posts + profiles) ────────────────────── */
+.channel-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.15rem 0.55rem;
+  background: var(--accent-soft);
+  border: 1px solid var(--border-focus);
+  border-radius: 20px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--accent);
+  text-decoration: none;
+  transition: background 0.1s;
+  white-space: nowrap;
+}
+.channel-tag:hover { background: var(--accent); color: #fff; text-decoration: none; }
+.channel-tag-icon  { font-size: 0.7rem; opacity: 0.8; }
+
+/* ── Role Badge ─────────────────────────────────────────────── */
+.role-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+.role-admin       { background: var(--danger-soft);  color: var(--danger);  border: 1px solid var(--danger);  }
+.role-chief-lead  { background: var(--gold-soft);     color: var(--gold);    border: 1px solid var(--gold);    }
+.role-lead        { background: var(--accent-soft);   color: var(--accent);  border: 1px solid var(--accent);  }
+
+/* ── Channel Header ─────────────────────────────────────────── */
+.channel-header {
+  position: relative;
+  margin-bottom: 1.5rem;
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+}
+
+.channel-banner {
+  width: 100%;
+  height: 140px;
+  object-fit: cover;
+  display: block;
+  background: linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-active) 100%);
+}
+.channel-banner-placeholder {
+  height: 140px;
+  background: linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-active) 100%);
+}
+
+.channel-header-body {
+  padding: 0 1.25rem 1.25rem;
+  display: flex;
+  align-items: flex-end;
+  gap: 1rem;
+  margin-top: -28px;
+}
+
+.channel-avatar-wrap {
+  flex-shrink: 0;
+  position: relative;
+}
+.channel-avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 12px;
+  border: 3px solid var(--bg-surface);
+  object-fit: cover;
+  background: var(--bg-elevated);
+}
+.channel-avatar-placeholder {
+  width: 64px;
+  height: 64px;
+  border-radius: 12px;
+  border: 3px solid var(--bg-surface);
+  background: var(--accent-soft);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Syne', sans-serif;
+  font-weight: 900;
+  font-size: 1.75rem;
+  color: var(--accent);
+}
+
+.channel-meta { flex: 1; min-width: 0; padding-top: 36px; }
+.channel-name {
+  font-family: 'Syne', sans-serif;
+  font-size: 1.3rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.channel-slug-label {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 400;
+}
+.channel-stats {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-top: 0.25rem;
+  flex-wrap: wrap;
+}
+.channel-stat-value { font-weight: 700; color: var(--text-secondary); }
+
+.channel-desc {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  margin-top: 0.6rem;
+  line-height: 1.6;
+}
+
+.channel-header-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+  padding-top: 36px;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+/* ── Status Pills on Channel ────────────────────────────────── */
+.channel-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.15rem 0.55rem;
+  border-radius: 20px;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+.pill-locked   { background: var(--warning-soft,rgba(245,158,11,.12)); color: var(--warning); }
+.pill-private  { background: var(--gold-soft); color: var(--gold); }
+.pill-archived { background: var(--danger-soft); color: var(--danger); }
+
+/* ── Channel Directory ──────────────────────────────────────── */
+.channels-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+.channel-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  cursor: pointer;
+  text-decoration: none;
+  display: block;
+}
+.channel-card:hover {
+  border-color: var(--accent);
+  box-shadow: var(--shadow-md);
+  text-decoration: none;
+}
+
+.channel-card-banner {
+  height: 72px;
+  object-fit: cover;
+  width: 100%;
+  background: linear-gradient(135deg, var(--bg-elevated), var(--bg-active));
+  display: block;
+}
+
+.channel-card-body {
+  padding: 0.85rem 1rem 1rem;
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+
+.channel-card-avatar {
+  width: 40px; height: 40px; border-radius: 8px;
+  object-fit: cover; flex-shrink: 0;
+  background: var(--accent-soft); border: 2px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Syne',sans-serif; font-weight: 900; font-size: 1.1rem; color: var(--accent);
+}
+
+.channel-card-name {
+  font-family: 'Syne', sans-serif;
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--text-primary);
+  margin-bottom: 0.2rem;
+}
+.channel-card-slug { font-size: 0.75rem; color: var(--text-muted); font-family: 'JetBrains Mono', monospace; }
+.channel-card-desc {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  margin-top: 0.35rem;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.channel-card-footer {
+  padding: 0.6rem 1rem;
+  border-top: 1px solid var(--border-subtle);
+  display: flex;
+  gap: 1rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+/* ── Members list ───────────────────────────────────────────── */
+.member-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.member-row:last-child { border-bottom: none; }
+.member-info { flex: 1; min-width: 0; }
+.member-name { font-weight: 600; font-size: 0.9rem; }
+.member-title { font-size: 0.75rem; color: var(--text-muted); }
+
+/* ── Lead Panel ─────────────────────────────────────────────── */
+.lead-panel {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.5rem;
+}
+.lead-panel-title {
+  font-family: 'Syne', sans-serif;
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin-bottom: 0.85rem;
+}
+
+.perm-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.5rem;
+}
+.perm-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.75rem;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  transition: background 0.1s, border-color 0.1s;
+  user-select: none;
+}
+.perm-toggle.active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+.perm-toggle input { display: none; }
+
+/* ── Channel tab bar ────────────────────────────────────────── */
+.channel-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 1.25rem;
+}
+.channel-tab-btn {
+  padding: 0.6rem 1.1rem;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.1s, border-color 0.1s;
+  margin-bottom: -1px;
+}
+.channel-tab-btn:hover { color: var(--text-primary); }
+.channel-tab-btn.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+/* ── Profile channel roles section ──────────────────────────── */
+.profile-roles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.profile-role-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.25rem 0.7rem;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  text-decoration: none;
+  transition: border-color 0.1s, color 0.1s;
+}
+.profile-role-chip:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  text-decoration: none;
+}
+.profile-role-chip .chip-role {
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.7;
+}
+.profile-role-chip.chief { border-color: var(--gold);   color: var(--gold);   background: var(--gold-soft); }
+.profile-role-chip.lead  { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+
+/* ── Pinned post indicator ──────────────────────────────────── */
+.pin-indicator {
+  font-size: 0.72rem;
+  color: var(--gold);
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+/* ── Removed post ───────────────────────────────────────────── */
+.post-removed-notice {
+  font-size: 0.8rem;
+  color: var(--danger);
+  font-style: italic;
+  padding: 0.35rem 0;
+}
+
+@media (max-width: 768px) {
+  .channels-grid { grid-template-columns: 1fr; }
+  .channel-header-body { flex-direction: column; align-items: flex-start; }
+  .channel-header-actions { padding-top: 0; }
+}
