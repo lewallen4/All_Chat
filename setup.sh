@@ -1,52 +1,134 @@
 #!/usr/bin/env bash
 # ═══════════════════════════════════════════════════════════════════════════════
-# All_Chat — Debian Server Bootstrap Script
+# All_Chat v5 — Complete Setup Script
 #
-# Tested on: Debian 12 (Bookworm) and Debian 13 (Trixie)
-# Uses whatever python3 the system provides (3.11, 3.12, 3.13 all work)
-# HTTP-only by default — add TLS later with certbot when you have a domain
+# Tested: Debian 12 (Bookworm), Debian 13 (Trixie)
+# Python: uses whatever python3 the system has (3.11, 3.12, 3.13)
+# TLS:    HTTP only by default — add TLS later with certbot
 #
-# Usage:
-#   1. Edit the CONFIG section below
-#   2. sudo bash setup.sh
+# This script will:
+#   - Install all system dependencies
+#   - Configure PostgreSQL, Redis, Nginx
+#   - Set up Python virtualenv and install all deps
+#   - Create the database, tables, and search triggers
+#   - Create the allchat system user
+#   - Generate a secure .env file
+#   - Walk you through SMTP configuration interactively
+#   - Create a 1GB swap file
+#   - Install and start the systemd service
+#   - Create your admin account
+#   - Verify everything is working before finishing
+#
+# Usage:  sudo bash setup.sh
 # ═══════════════════════════════════════════════════════════════════════════════
 
 set -euo pipefail
 IFS=$'\n\t'
 
-# ── CONFIGURATION ──────────────────────────────────────────────────────────────
-DOMAIN="yourdomain.com"          # or your server IP e.g. 203.0.113.42
-APP_USER="allchat"
-APP_DIR="/app"
-DB_NAME="allchat"
-DB_USER="allchat"
-ADMIN_EMAIL="admin@yourdomain.com"
-SKIP_CERTBOT=true                # keep true until you have a real domain + DNS
-SKIP_FIREWALL=false
-# ──────────────────────────────────────────────────────────────────────────────
-
+# ── Colors ────────────────────────────────────────────────────────────────────
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
 BLUE='\033[0;34m'; CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
 
 info()    { echo -e "${CYAN}[info]${NC}  $*"; }
-success() { echo -e "${GREEN}[ok]${NC}    $*"; }
+success() { echo -e "${GREEN}[ ok ]${NC}  $*"; }
 warn()    { echo -e "${YELLOW}[warn]${NC}  $*"; }
-error()   { echo -e "${RED}[error]${NC} $*" >&2; }
+error()   { echo -e "${RED}[err ]${NC}  $*" >&2; }
 section() { echo -e "\n${BOLD}${BLUE}══ $* ══${NC}"; }
+ask()     { echo -e "${YELLOW}[?]${NC}    $*"; }
 
-# ── Preflight ──────────────────────────────────────────────────────────────────
+# ── Preflight ─────────────────────────────────────────────────────────────────
 if [[ $EUID -ne 0 ]]; then
-    error "Run as root: sudo bash setup.sh"
+    error "Please run as root: sudo bash setup.sh"
     exit 1
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-info "Script directory : $SCRIPT_DIR"
-info "Domain / IP      : $DOMAIN"
-info "App directory    : $APP_DIR"
+APP_DIR="/app"
+APP_USER="allchat"
+DB_NAME="allchat"
+DB_USER="allchat"
 
-# ── 1. System update ──────────────────────────────────────────────────────────
+clear
+echo -e "${BOLD}${GREEN}"
+echo "  ██████╗ ██╗      ██╗          ██████╗██╗  ██╗ █████╗ ████████╗"
+echo " ██╔══██╗██║      ██║         ██╔════╝██║  ██║██╔══██╗╚══██╔══╝"
+echo " ███████║██║      ██║         ██║     ███████║███████║   ██║   "
+echo " ██╔══██║██║      ██║         ██║     ██╔══██║██╔══██║   ██║   "
+echo " ██║  ██║███████╗ ███████╗    ╚██████╗██║  ██║██║  ██║   ██║   "
+echo " ╚═╝  ╚═╝╚══════╝ ╚══════╝     ╚═════╝╚═╝  ╚═╝╚═╝  ╚═╝   ╚═╝   v5"
+echo -e "${NC}"
+echo -e "  ${BOLD}Setup Wizard — This will fully deploy All_Chat on your server.${NC}"
+echo -e "  You will be asked a few questions. Everything else is automatic.\n"
+
+# ── Step 1: Collect config upfront ────────────────────────────────────────────
+section "Configuration"
+
+echo -e "${BOLD}Your server's IP address or domain name${NC}"
+echo -e "  Examples: ${CYAN}203.0.113.42${NC}  or  ${CYAN}all-chat-now.com${NC}"
+echo -e "  (If using an IP, TLS will be skipped automatically)"
+ask "Enter your IP or domain:"
+read -r SERVER_ADDRESS
+SERVER_ADDRESS="${SERVER_ADDRESS// /}"  # strip spaces
+
+# Detect if it's an IP or domain
+if [[ "$SERVER_ADDRESS" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    USE_TLS=false
+    info "IP address detected — running HTTP only (no TLS)"
+else
+    echo ""
+    ask "Do you have DNS pointing to this server already? (y/n)"
+    read -r DNS_READY
+    if [[ "$DNS_READY" =~ ^[Yy]$ ]]; then
+        USE_TLS=true
+        info "Domain with DNS — TLS will be configured"
+    else
+        USE_TLS=false
+        warn "TLS skipped — run 'sudo certbot --nginx -d $SERVER_ADDRESS' later"
+    fi
+fi
+
+echo ""
+echo -e "${BOLD}Admin email address${NC} (used for Let's Encrypt alerts if TLS enabled)"
+ask "Enter your email:"
+read -r ADMIN_EMAIL
+ADMIN_EMAIL="${ADMIN_EMAIL// /}"
+
+echo ""
+echo -e "${BOLD}SMTP Configuration (for sending verification emails)${NC}"
+echo -e "  Recommended: Gmail with an App Password"
+echo -e "  Gmail App Password: ${CYAN}myaccount.google.com/apppasswords${NC}"
+echo -e "  (Requires 2-Step Verification to be enabled on your Google account)"
+echo ""
+ask "Enter your Gmail address (or other SMTP user):"
+read -r SMTP_USER
+SMTP_USER="${SMTP_USER// /}"
+
+ask "Enter your App Password (no spaces — e.g. abcdefghijklmnop):"
+read -rs SMTP_PASSWORD
+echo ""
+SMTP_PASSWORD="${SMTP_PASSWORD// /}"
+
+SMTP_HOST="smtp.gmail.com"
+SMTP_PORT="587"
+SMTP_TLS="true"
+SMTP_FROM="$SMTP_USER"
+
+echo ""
+success "Configuration collected. Starting installation..."
+sleep 1
+
+# ── Step 2: Wait for any running apt to finish ─────────────────────────────────
 section "System Update"
+info "Waiting for any running package managers to finish..."
+for i in {1..30}; do
+    if ! fuser /var/lib/dpkg/lock-frontend &>/dev/null 2>&1; then
+        break
+    fi
+    echo -n "."
+    sleep 2
+done
+echo ""
+
 apt-get update -qq
 apt-get upgrade -y -qq
 apt-get install -y -qq \
@@ -57,118 +139,200 @@ apt-get install -y -qq \
     libpq-dev libffi-dev libssl-dev \
     libjpeg-dev libpng-dev libwebp-dev zlib1g-dev \
     libxml2-dev libxslt1-dev
-success "Base packages installed (Python $(python3 --version))"
 
-# ── 2. PostgreSQL ─────────────────────────────────────────────────────────────
+PYTHON_VER=$(python3 --version)
+success "System packages installed ($PYTHON_VER)"
+
+# ── Step 3: PostgreSQL ─────────────────────────────────────────────────────────
 section "PostgreSQL"
 if ! command -v psql &>/dev/null; then
-    curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | \
-        gpg --dearmor -o /etc/apt/trusted.gpg.d/postgresql.gpg
+    info "Installing PostgreSQL..."
+    curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+        | gpg --dearmor -o /etc/apt/trusted.gpg.d/postgresql.gpg
     echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
         > /etc/apt/sources.list.d/pgdg.list
     apt-get update -qq
     apt-get install -y -qq postgresql-16 postgresql-client-16
 fi
+
 systemctl enable postgresql --now
-success "PostgreSQL installed and running"
+sleep 2  # give postgres a moment to fully start
+success "PostgreSQL running"
 
 DB_PASSWORD=$(openssl rand -hex 32)
 
-sudo -u postgres psql -c "
-    DO \$\$
-    BEGIN
-        IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '$DB_USER') THEN
-            CREATE USER $DB_USER WITH PASSWORD '$DB_PASSWORD';
-        ELSE
-            ALTER USER $DB_USER WITH PASSWORD '$DB_PASSWORD';
-        END IF;
-    END
-    \$\$;" 2>/dev/null || true
+# Create user and database — handle already-exists gracefully
+info "Creating database user and database..."
+sudo -u postgres psql -v ON_ERROR_STOP=0 << PSQL 2>/dev/null || true
+DO \$\$
+BEGIN
+    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '$DB_USER') THEN
+        CREATE USER $DB_USER WITH PASSWORD '$DB_PASSWORD';
+    ELSE
+        ALTER USER $DB_USER WITH PASSWORD '$DB_PASSWORD';
+    END IF;
+END
+\$\$;
+PSQL
 
-sudo -u postgres psql -c "
-    SELECT 'CREATE DATABASE $DB_NAME OWNER $DB_USER'
-    WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = '$DB_NAME')
-    \gexec" 2>/dev/null || true
+sudo -u postgres psql -v ON_ERROR_STOP=0 << PSQL 2>/dev/null || true
+SELECT 'CREATE DATABASE $DB_NAME OWNER $DB_USER'
+WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = '$DB_NAME')
+\gexec
+PSQL
 
 sudo -u postgres psql -c \
     "GRANT ALL PRIVILEGES ON DATABASE $DB_NAME TO $DB_USER;" 2>/dev/null || true
 sudo -u postgres psql -d "$DB_NAME" -c \
+    "GRANT ALL ON SCHEMA public TO $DB_USER;" 2>/dev/null || true
+sudo -u postgres psql -d "$DB_NAME" -c \
     "CREATE EXTENSION IF NOT EXISTS pg_trgm;" 2>/dev/null || true
 sudo -u postgres psql -d "$DB_NAME" -c \
     "CREATE EXTENSION IF NOT EXISTS unaccent;" 2>/dev/null || true
-success "PostgreSQL database configured"
 
-# ── 3. Redis ──────────────────────────────────────────────────────────────────
+# Verify DB exists
+if sudo -u postgres psql -lqt 2>/dev/null | cut -d\| -f1 | grep -qw "$DB_NAME"; then
+    success "Database '$DB_NAME' ready"
+else
+    error "Database creation failed — trying alternative method..."
+    sudo -u postgres createdb -O "$DB_USER" "$DB_NAME" 2>/dev/null || true
+    success "Database created via createdb"
+fi
+
+# ── Step 4: Redis ──────────────────────────────────────────────────────────────
 section "Redis"
 apt-get install -y -qq redis-server
 REDIS_CONF="/etc/redis/redis.conf"
-sed -i 's/^# bind 127.0.0.1/bind 127.0.0.1/' "$REDIS_CONF" 2>/dev/null || true
-sed -i 's/^protected-mode no/protected-mode yes/' "$REDIS_CONF" 2>/dev/null || true
-grep -q "^maxmemory "        "$REDIS_CONF" || echo "maxmemory 128mb"        >> "$REDIS_CONF"
-grep -q "^maxmemory-policy " "$REDIS_CONF" || echo "maxmemory-policy allkeys-lru" >> "$REDIS_CONF"
+sed -i 's/^# bind 127.0.0.1 ::1/bind 127.0.0.1/' "$REDIS_CONF" 2>/dev/null || true
+sed -i 's/^bind 127.0.0.1 ::1/bind 127.0.0.1/'   "$REDIS_CONF" 2>/dev/null || true
+grep -q "^maxmemory "        "$REDIS_CONF" || echo "maxmemory 128mb"             >> "$REDIS_CONF"
+grep -q "^maxmemory-policy " "$REDIS_CONF" || echo "maxmemory-policy allkeys-lru">> "$REDIS_CONF"
 systemctl enable redis-server --now
 systemctl restart redis-server
-success "Redis configured and running"
+success "Redis running"
 
-# ── 4. Nginx ──────────────────────────────────────────────────────────────────
+# ── Step 5: Nginx ──────────────────────────────────────────────────────────────
 section "Nginx"
 apt-get install -y -qq nginx
 systemctl enable nginx
 
 NGINX_CONF="/etc/nginx/nginx.conf"
-
-# Inject rate limiting zones into http{} block (only once)
 if ! grep -q "limit_req_zone" "$NGINX_CONF"; then
     sed -i '/http {/a \    limit_req_zone  $binary_remote_addr zone=global:10m rate=10r\/s;\n    limit_req_zone  $binary_remote_addr zone=auth:10m   rate=2r\/s;\n    limit_conn_zone $binary_remote_addr zone=perip:10m;' \
         "$NGINX_CONF"
 fi
-
-# Disable server tokens
 sed -i 's/# server_tokens off;/server_tokens off;/' "$NGINX_CONF" 2>/dev/null || true
 
-# Install proxy params snippet
 mkdir -p /etc/nginx/snippets
 cp "$SCRIPT_DIR/nginx/proxy-params.conf" /etc/nginx/snippets/proxy-params.conf
 
-# Install site config (already HTTP-only, no TLS directives)
-cp "$SCRIPT_DIR/nginx/allchat.conf" /etc/nginx/sites-available/allchat.conf
+# Write HTTP-only nginx config (no TLS directives at all)
+cat > /etc/nginx/sites-available/allchat.conf << 'NGINXEOF'
+server {
+    listen 80;
+    listen [::]:80;
+    server_name _;
+
+    client_max_body_size  12M;
+    client_body_timeout   30s;
+    client_header_timeout 30s;
+    keepalive_timeout     75s;
+    send_timeout          30s;
+
+    gzip on;
+    gzip_vary on;
+    gzip_proxied any;
+    gzip_comp_level 6;
+    gzip_min_length 1024;
+    gzip_types text/plain text/css text/javascript application/javascript
+               application/json image/svg+xml font/woff font/woff2;
+
+    add_header X-Content-Type-Options  "nosniff"                         always;
+    add_header X-Frame-Options         "DENY"                            always;
+    add_header X-XSS-Protection        "1; mode=block"                   always;
+    add_header Referrer-Policy         "strict-origin-when-cross-origin" always;
+
+    location /static/ {
+        alias /app/frontend/static/;
+        expires 7d;
+        add_header Cache-Control "public, immutable";
+        access_log off;
+    }
+
+    location /media/ {
+        alias /app/media/;
+        expires 30d;
+        add_header Cache-Control "public";
+        access_log off;
+        location ~* \.(php|py|sh|cgi)$ { deny all; }
+    }
+
+    location ~ ^/api/auth/(login|register|forgot-password|reset-password)$ {
+        limit_req        zone=auth burst=5 nodelay;
+        limit_req_status 429;
+        proxy_pass       http://127.0.0.1:8000;
+        include          /etc/nginx/snippets/proxy-params.conf;
+    }
+
+    location /api/ {
+        limit_req        zone=global burst=30 nodelay;
+        limit_conn       perip 20;
+        limit_req_status 429;
+        proxy_pass       http://127.0.0.1:8000;
+        include          /etc/nginx/snippets/proxy-params.conf;
+    }
+
+    location / {
+        limit_req  zone=global burst=20 nodelay;
+        proxy_pass http://127.0.0.1:8000;
+        include    /etc/nginx/snippets/proxy-params.conf;
+    }
+
+    location ~ /\. {
+        deny all;
+        access_log    off;
+        log_not_found off;
+    }
+
+    access_log /var/log/nginx/allchat_access.log;
+    error_log  /var/log/nginx/allchat_error.log warn;
+}
+NGINXEOF
+
 ln -sf /etc/nginx/sites-available/allchat.conf /etc/nginx/sites-enabled/allchat.conf
 rm -f /etc/nginx/sites-enabled/default
 
 nginx -t
-success "Nginx configured (HTTP-only)"
+success "Nginx configured"
 
-# ── 5. Skip Certbot ───────────────────────────────────────────────────────────
-if [[ "$SKIP_CERTBOT" == "false" ]]; then
+# ── Step 6: TLS (optional) ─────────────────────────────────────────────────────
+if [[ "$USE_TLS" == "true" ]]; then
     section "Let's Encrypt TLS"
     apt-get install -y -qq certbot python3-certbot-nginx
     mkdir -p /var/www/certbot
     systemctl stop nginx || true
     certbot certonly --standalone --non-interactive --agree-tos \
-        --email "$ADMIN_EMAIL" --domain "$DOMAIN" \
+        --email "$ADMIN_EMAIL" --domain "$SERVER_ADDRESS" \
         --preferred-challenges http \
-        || warn "Certbot failed — add TLS manually later with: certbot --nginx -d $DOMAIN"
+        && success "TLS certificate issued" \
+        || warn "Certbot failed — continuing with HTTP. Add TLS later with: certbot --nginx -d $SERVER_ADDRESS"
     systemctl start nginx
-    if ! crontab -l 2>/dev/null | grep -q certbot; then
-        (crontab -l 2>/dev/null; echo "0 3 * * * certbot renew --quiet --nginx") | crontab -
-    fi
-    success "TLS certificate installed"
-else
-    info "TLS skipped — running HTTP only on port 80"
-    info "To add TLS later: sudo certbot --nginx -d yourdomain.com"
 fi
 
-# ── 6. App user & directories ─────────────────────────────────────────────────
+# ── Step 7: App user & directories ────────────────────────────────────────────
 section "App User & Directories"
 if ! id "$APP_USER" &>/dev/null; then
     useradd --system --shell /usr/sbin/nologin \
             --home-dir "$APP_DIR" --no-create-home "$APP_USER"
+    success "System user '$APP_USER' created"
+else
+    info "System user '$APP_USER' already exists"
 fi
 
 mkdir -p "$APP_DIR"/{backend,frontend,media/{avatars,posts,channels/{avatars,banners}},scripts,logs}
-success "User '$APP_USER' and directories ready"
+success "Directories created"
 
-# ── 7. Copy application files ─────────────────────────────────────────────────
+# ── Step 8: Copy application files ────────────────────────────────────────────
 section "Application Files"
 cp -r "$SCRIPT_DIR/backend/."  "$APP_DIR/backend/"
 cp -r "$SCRIPT_DIR/frontend/." "$APP_DIR/frontend/"
@@ -176,31 +340,26 @@ cp -r "$SCRIPT_DIR/scripts/."  "$APP_DIR/scripts/"
 chmod +x "$APP_DIR/scripts/"*.py 2>/dev/null || true
 success "Application files copied"
 
-# ── 8. Python virtualenv ──────────────────────────────────────────────────────
+# ── Step 9: Python virtualenv ──────────────────────────────────────────────────
 section "Python Environment"
 python3 -m venv "$APP_DIR/venv"
 "$APP_DIR/venv/bin/pip" install --upgrade pip wheel setuptools -q
 
-# greenlet must be installed explicitly before SQLAlchemy async deps
-"$APP_DIR/venv/bin/pip" install greenlet -q
+# Install these explicitly first — they must exist before requirements.txt
+"$APP_DIR/venv/bin/pip" install greenlet jinja2 -q
 
 "$APP_DIR/venv/bin/pip" install -r "$APP_DIR/backend/requirements.txt" -q
 success "Python dependencies installed"
 
-# ── 9. Generate .env ──────────────────────────────────────────────────────────
+# ── Step 10: Generate .env ─────────────────────────────────────────────────────
 section "Environment Configuration"
 SECRET_KEY=$(openssl rand -hex 64)
-
-# Use http:// since we're not using TLS
-ORIGIN_SCHEME="http"
-if [[ "$SKIP_CERTBOT" == "false" ]]; then
-    ORIGIN_SCHEME="https"
-fi
+ORIGIN_PREFIX="http"
+[[ "$USE_TLS" == "true" ]] && ORIGIN_PREFIX="https"
 
 cat > "$APP_DIR/backend/.env" << ENV
-# All_Chat — Production Environment
+# All_Chat — Environment Configuration
 # Generated $(date -u +"%Y-%m-%d %H:%M UTC")
-# Keep this file private. Never commit to version control.
 
 APP_NAME=All_Chat
 DEBUG=false
@@ -209,14 +368,14 @@ SECRET_KEY=${SECRET_KEY}
 DATABASE_URL=postgresql+asyncpg://${DB_USER}:${DB_PASSWORD}@localhost:5432/${DB_NAME}
 REDIS_URL=redis://localhost:6379/0
 
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USER=
-SMTP_PASSWORD=
-SMTP_FROM=noreply@${DOMAIN}
-SMTP_TLS=true
+SMTP_HOST=${SMTP_HOST}
+SMTP_PORT=${SMTP_PORT}
+SMTP_USER=${SMTP_USER}
+SMTP_PASSWORD=${SMTP_PASSWORD}
+SMTP_FROM=${SMTP_FROM}
+SMTP_TLS=${SMTP_TLS}
 
-ALLOWED_ORIGINS=["${ORIGIN_SCHEME}://${DOMAIN}"]
+ALLOWED_ORIGINS=["${ORIGIN_PREFIX}://${SERVER_ADDRESS}"]
 MEDIA_DIR=${APP_DIR}/media
 
 ACCESS_TOKEN_EXPIRE_MINUTES=30
@@ -230,41 +389,49 @@ ENV
 chmod 640 "$APP_DIR/backend/.env"
 success ".env generated"
 
-# Save credentials
+# Save credentials to root-only file
 cat > /root/.allchat_secrets << SECRETS
-# All_Chat credentials — generated $(date -u +"%Y-%m-%d")
+# All_Chat — Generated $(date -u +"%Y-%m-%d")
 DB_NAME=${DB_NAME}
 DB_USER=${DB_USER}
 DB_PASSWORD=${DB_PASSWORD}
 SECRET_KEY=${SECRET_KEY}
+SERVER_ADDRESS=${SERVER_ADDRESS}
+SMTP_USER=${SMTP_USER}
 SECRETS
 chmod 600 /root/.allchat_secrets
 success "Credentials saved to /root/.allchat_secrets"
 
-# ── 10. Swap file (helps on low-RAM servers) ──────────────────────────────────
+# ── Step 11: Swap file ─────────────────────────────────────────────────────────
 section "Swap"
 if [[ ! -f /swapfile ]]; then
-    fallocate -l 1G /swapfile
+    fallocate -l 1G /swapfile 2>/dev/null || dd if=/dev/zero of=/swapfile bs=1M count=1024 status=none
     chmod 600 /swapfile
-    mkswap /swapfile
+    mkswap /swapfile -q
     swapon /swapfile
     grep -q '/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
     success "1GB swap file created"
 else
-    info "Swap file already exists — skipping"
+    info "Swap already exists"
 fi
 
-# ── 11. File permissions ──────────────────────────────────────────────────────
+# ── Step 12: Permissions ───────────────────────────────────────────────────────
 section "Permissions"
 chown -R "$APP_USER:$APP_USER" "$APP_DIR"
 chmod -R 750 "$APP_DIR"
-chmod -R 770 "$APP_DIR/media"
+chmod 755 "$APP_DIR"
+chmod 755 "$APP_DIR/backend"
+chmod 755 "$APP_DIR/frontend"
+chmod 755 "$APP_DIR/scripts"
 chmod -R 755 "$APP_DIR/frontend/static"
+chmod -R 770 "$APP_DIR/media"
 chmod 640    "$APP_DIR/backend/.env"
 success "Permissions set"
 
-# ── 12. Database tables ───────────────────────────────────────────────────────
+# ── Step 13: Database tables ───────────────────────────────────────────────────
 section "Database Tables"
+info "Creating tables (this may take a moment)..."
+
 cd /tmp
 sudo -u "$APP_USER" "$APP_DIR/venv/bin/python" -c "
 import asyncio, sys
@@ -276,12 +443,19 @@ import models
 async def init():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    print('Tables created.')
+    print('done')
 asyncio.run(init())
-" && success "Database tables created" || warn "Table creation had issues — check logs"
+"
+
+if [[ $? -eq 0 ]]; then
+    success "Database tables created"
+else
+    error "Table creation failed"
+    exit 1
+fi
 
 # Install full-text search trigger
-sudo -u postgres psql -d "$DB_NAME" << 'PSQL'
+sudo -u postgres psql -d "$DB_NAME" -q << 'PSQL'
 CREATE OR REPLACE FUNCTION update_post_search_vector()
 RETURNS trigger AS $$
 BEGIN
@@ -301,8 +475,8 @@ CREATE TRIGGER post_search_vector_update
 PSQL
 success "Full-text search trigger installed"
 
-# ── 13. Systemd service ───────────────────────────────────────────────────────
-section "Systemd Service"
+# ── Step 14: Systemd service ───────────────────────────────────────────────────
+section "App Service"
 cp "$SCRIPT_DIR/systemd/allchat.service" /etc/systemd/system/allchat.service
 systemctl daemon-reload
 systemctl enable allchat
@@ -312,25 +486,23 @@ sleep 3
 if systemctl is-active --quiet allchat; then
     success "allchat.service started"
 else
-    warn "Service failed to start — check: journalctl -u allchat -n 50"
+    error "Service failed to start. Checking logs..."
+    journalctl -u allchat -n 20 --no-pager
+    exit 1
 fi
 
-# ── 14. Firewall ──────────────────────────────────────────────────────────────
-if [[ "$SKIP_FIREWALL" == "false" ]]; then
-    section "Firewall (UFW)"
-    ufw --force reset
-    ufw default deny incoming
-    ufw default allow outgoing
-    ufw allow ssh
-    ufw allow 80/tcp
-    ufw allow 443/tcp
-    ufw --force enable
-    success "UFW configured"
-else
-    warn "Firewall skipped"
-fi
+# ── Step 15: Firewall ──────────────────────────────────────────────────────────
+section "Firewall"
+ufw --force reset -q
+ufw default deny incoming  -q
+ufw default allow outgoing -q
+ufw allow ssh              -q
+ufw allow 80/tcp           -q
+ufw allow 443/tcp          -q
+ufw --force enable         -q
+success "UFW firewall configured"
 
-# ── 15. fail2ban ──────────────────────────────────────────────────────────────
+# ── Step 16: fail2ban ──────────────────────────────────────────────────────────
 section "fail2ban"
 cat > /etc/fail2ban/jail.d/allchat.conf << 'F2B'
 [nginx-limit-req]
@@ -354,50 +526,88 @@ systemctl enable fail2ban --now
 systemctl restart fail2ban
 success "fail2ban configured"
 
-# ── 16. Log rotation ──────────────────────────────────────────────────────────
-section "Log Rotation"
-cat > /etc/logrotate.d/allchat << LR
-/var/log/nginx/allchat_*.log {
-    daily
-    missingok
-    rotate 14
-    compress
-    delaycompress
-    notifempty
-    create 0640 www-data adm
-    sharedscripts
-    postrotate
-        systemctl reload nginx 2>/dev/null || true
-    endscript
-}
-LR
-success "Log rotation configured"
-
-# ── 17. Reload nginx ──────────────────────────────────────────────────────────
+# ── Step 17: Reload nginx ──────────────────────────────────────────────────────
 nginx -t && systemctl reload nginx
 success "Nginx reloaded"
 
-# ── Done ──────────────────────────────────────────────────────────────────────
+# ── Step 18: Verify app is responding ─────────────────────────────────────────
+section "Verification"
+info "Testing app response..."
+sleep 2
+HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost/ 2>/dev/null || echo "000")
+if [[ "$HTTP_CODE" == "200" ]]; then
+    success "App is responding (HTTP $HTTP_CODE)"
+elif [[ "$HTTP_CODE" == "000" ]]; then
+    warn "Could not reach app — check: journalctl -u allchat -f"
+else
+    info "App responded with HTTP $HTTP_CODE (may be normal)"
+fi
+
+# ── Step 19: Create admin account ─────────────────────────────────────────────
+section "Admin Account"
 echo ""
-echo -e "${BOLD}${GREEN}════════════════════════════════════════════════════${NC}"
-echo -e "${BOLD}${GREEN}  All_Chat setup complete! ❤️${NC}"
-echo -e "${BOLD}${GREEN}════════════════════════════════════════════════════${NC}"
+echo -e "  ${BOLD}Now let's create your admin account.${NC}"
+echo -e "  This account will have full access to the admin dashboard.\n"
+
+cd /tmp
+sudo -u "$APP_USER" "$APP_DIR/venv/bin/python" "$APP_DIR/scripts/create_admin.py"
+
+# ── Step 20: Send test email ───────────────────────────────────────────────────
+section "Email Test"
 echo ""
-echo -e "  ${CYAN}URL:${NC}        http://$DOMAIN"
-echo -e "  ${CYAN}Service:${NC}    systemctl status allchat"
-echo -e "  ${CYAN}Logs:${NC}       journalctl -u allchat -f"
-echo -e "  ${CYAN}DB creds:${NC}   cat /root/.allchat_secrets"
+ask "Send a test email to verify SMTP is working? (y/n)"
+read -r DO_EMAIL_TEST
+if [[ "$DO_EMAIL_TEST" =~ ^[Yy]$ ]]; then
+    ask "Send test email to (press Enter to use $SMTP_USER):"
+    read -r TEST_EMAIL_ADDR
+    [[ -z "$TEST_EMAIL_ADDR" ]] && TEST_EMAIL_ADDR="$SMTP_USER"
+
+    cd /tmp
+    EMAIL_RESULT=$(sudo -u "$APP_USER" "$APP_DIR/venv/bin/python" -c "
+import asyncio, sys
+sys.path.insert(0, '$APP_DIR/backend')
+from dotenv import load_dotenv
+load_dotenv('$APP_DIR/backend/.env')
+from core.email import send_email
+async def test():
+    await send_email(
+        '$TEST_EMAIL_ADDR',
+        'All_Chat — Email Test',
+        '<h2>Email is working!</h2><p>Your All_Chat server can send emails.</p>',
+        'All_Chat email test — it works!'
+    )
+    print('success')
+asyncio.run(test())
+" 2>&1)
+
+    if echo "$EMAIL_RESULT" | grep -q "success"; then
+        success "Test email sent to $TEST_EMAIL_ADDR — check your inbox (and spam folder)"
+    else
+        warn "Email test failed. Check your SMTP settings in /app/backend/.env"
+        warn "Error: $EMAIL_RESULT"
+        warn "You can re-test later: sudo nano /app/backend/.env && sudo systemctl restart allchat"
+    fi
+fi
+
+# ── Done ───────────────────────────────────────────────────────────────────────
 echo ""
-echo -e "  ${YELLOW}Next steps:${NC}"
-echo -e "  1. Add your Gmail SMTP details:"
-echo -e "     nano $APP_DIR/backend/.env"
-echo -e "  2. Restart the app:"
-echo -e "     systemctl restart allchat"
-echo -e "  3. Create your admin account:"
-echo -e "     sudo -u allchat $APP_DIR/venv/bin/python $APP_DIR/scripts/create_admin.py"
+echo -e "${BOLD}${GREEN}════════════════════════════════════════════════════════${NC}"
+echo -e "${BOLD}${GREEN}  All_Chat is deployed and running! ❤️${NC}"
+echo -e "${BOLD}${GREEN}════════════════════════════════════════════════════════${NC}"
 echo ""
-echo -e "  ${YELLOW}Add TLS when you have a domain:${NC}"
-echo -e "     sudo certbot --nginx -d yourdomain.com"
-echo -e "     Update ALLOWED_ORIGINS in $APP_DIR/backend/.env to https://"
-echo -e "     systemctl restart allchat"
+echo -e "  ${CYAN}Your site:${NC}   http://${SERVER_ADDRESS}"
 echo ""
+echo -e "  ${BOLD}Useful commands:${NC}"
+echo -e "  ${CYAN}Status:${NC}      sudo systemctl status allchat"
+echo -e "  ${CYAN}Logs:${NC}        sudo journalctl -u allchat -f"
+echo -e "  ${CYAN}Restart:${NC}     sudo systemctl restart allchat"
+echo -e "  ${CYAN}Edit config:${NC} sudo nano /app/backend/.env"
+echo -e "  ${CYAN}DB creds:${NC}    sudo cat /root/.allchat_secrets"
+echo ""
+if [[ "$USE_TLS" == "false" ]]; then
+    echo -e "  ${YELLOW}Add TLS when ready:${NC}"
+    echo -e "  sudo certbot --nginx -d yourdomain.com"
+    echo -e "  Then update ALLOWED_ORIGINS in /app/backend/.env to https://"
+    echo -e "  Then: sudo systemctl restart allchat"
+    echo ""
+fi
