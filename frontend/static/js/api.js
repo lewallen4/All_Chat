@@ -27,6 +27,20 @@ const API = (() => {
     localStorage.removeItem('ac_refresh');
   }
 
+  async function logoutFromServer() {
+    const rt = getRefreshToken();
+    if (rt) {
+      try {
+        await fetch(`${BASE}/auth/logout`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refresh_token: rt }),
+        });
+      } catch {}
+    }
+    clearTokens();
+  }
+
   let _refreshing = null; // singleton refresh promise
 
   async function refreshTokens() {
