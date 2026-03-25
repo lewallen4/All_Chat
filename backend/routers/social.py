@@ -37,9 +37,13 @@ class CommentCreate(BaseModel):
     @field_validator("body")
     @classmethod
     def validate_body(cls, v):
+        if not v or not v.strip():
+            raise ValueError("Comment cannot be empty.")
+        if len(v) > 5000:
+            raise ValueError("Comment too long (max 5,000 chars).")
         v = sanitize_html(v)
-        if len(v) < 1:   raise ValueError("Comment cannot be empty.")
-        if len(v) > 5000: raise ValueError("Comment too long (max 5,000 chars).")
+        if len(v.strip()) < 1:
+            raise ValueError("Comment cannot be empty after sanitisation.")
         return v
 
 
@@ -337,6 +341,25 @@ async def create_comment(
     post = post_r.scalar_one_or_none()
     if not post:
         raise HTTPException(404, "Post not found.")
+
+    # If post is in a channel, enforce channel access rules
+    if post.channel_id and not current_user.is_admin:
+        from models.channel import Channel, ChannelMembership, MemberRole
+        ch_r = await db.execute(select(Channel).where(Channel.id == post.channel_id))
+        ch   = ch_r.scalar_one_or_none()
+        if ch:
+            if ch.is_locked:
+                raise HTTPException(403, "This channel is locked — comments are disabled.")
+            if ch.is_private:
+                ms_r = await db.execute(
+                    select(ChannelMembership).where(
+                        ChannelMembership.channel_id == post.channel_id,
+                        ChannelMembership.user_id    == current_user.id,
+                    )
+                )
+                ms = ms_r.scalar_one_or_none()
+                if not ms or ms.role == MemberRole.BANNED:
+                    raise HTTPException(403, "You must be a member to comment in this channel.")
 
     if req.parent_id:
         parent_r = await db.execute(select(Comment).where(Comment.id == req.parent_id))

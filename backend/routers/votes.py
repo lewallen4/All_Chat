@@ -34,6 +34,22 @@ async def cast_vote(
     if not post:
         raise HTTPException(status_code=404, detail="Post not found.")
 
+    # If post is in a private channel, check membership
+    if post.channel_id and not current_user.is_admin:
+        from models.channel import Channel, ChannelMembership, MemberRole
+        ch_r = await db.execute(select(Channel).where(
+            Channel.id == post.channel_id, Channel.is_private == True
+        ))
+        ch = ch_r.scalar_one_or_none()
+        if ch:
+            ms_r = await db.execute(select(ChannelMembership).where(
+                ChannelMembership.channel_id == post.channel_id,
+                ChannelMembership.user_id    == current_user.id,
+            ))
+            ms = ms_r.scalar_one_or_none()
+            if not ms or ms.role == MemberRole.BANNED:
+                raise HTTPException(status_code=403, detail="You must be a member to vote in this channel.")
+
     # Prevent self-voting
     if post.author_id == current_user.id:
         raise HTTPException(status_code=403, detail="You cannot vote on your own post.")

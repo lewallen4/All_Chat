@@ -60,6 +60,35 @@ async def get_feed(
         ch   = ch_r.scalar_one_or_none()
         if ch:
             query = query.where(Post.channel_id == ch.id)
+    else:
+        # Exclude posts from private channels unless the viewer is a member
+        from models.channel import Channel, ChannelMembership, MemberRole
+        if current_user and not current_user.is_admin:
+            # Posts from public channels OR channels the user is a member of
+            member_channel_ids = select(ChannelMembership.channel_id).where(
+                ChannelMembership.user_id == current_user.id,
+                ChannelMembership.role    != MemberRole.BANNED,
+            )
+            private_channel_ids = select(Channel.id).where(Channel.is_private == True)
+            # Include post if: no channel, public channel, or user is member
+            query = query.where(
+                (Post.channel_id == None) |
+                (Post.channel_id.not_in(
+                    select(Channel.id).where(
+                        Channel.is_private == True,
+                        Channel.id.not_in(member_channel_ids)
+                    )
+                ))
+            )
+        elif not current_user:
+            # Unauthenticated: only posts with no channel or public channel
+            from models.channel import Channel as Ch2
+            query = query.where(
+                (Post.channel_id == None) |
+                (Post.channel_id.in_(
+                    select(Ch2.id).where(Ch2.is_private == False)
+                ))
+            )
     if time_filter is not None:
         query = query.where(Post.created_at >= time_filter)
 

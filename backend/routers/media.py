@@ -26,13 +26,21 @@ MAX_RESPONSE_SIZE = 500_000  # 500KB — enough for HTML head
 
 # Block private/internal IP ranges (SSRF protection)
 BLOCKED_NETWORKS = [
-    ipaddress.ip_network("10.0.0.0/8"),
-    ipaddress.ip_network("172.16.0.0/12"),
-    ipaddress.ip_network("192.168.0.0/16"),
-    ipaddress.ip_network("127.0.0.0/8"),
-    ipaddress.ip_network("169.254.0.0/16"),
-    ipaddress.ip_network("::1/128"),
-    ipaddress.ip_network("fc00::/7"),
+    ipaddress.ip_network("0.0.0.0/8"),        # this network
+    ipaddress.ip_network("10.0.0.0/8"),        # RFC1918 private
+    ipaddress.ip_network("100.64.0.0/10"),     # shared address space
+    ipaddress.ip_network("127.0.0.0/8"),       # loopback
+    ipaddress.ip_network("169.254.0.0/16"),    # link-local
+    ipaddress.ip_network("172.16.0.0/12"),     # RFC1918 private
+    ipaddress.ip_network("192.168.0.0/16"),    # RFC1918 private
+    ipaddress.ip_network("198.18.0.0/15"),     # benchmark
+    ipaddress.ip_network("198.51.100.0/24"),   # TEST-NET-2
+    ipaddress.ip_network("203.0.113.0/24"),    # TEST-NET-3
+    ipaddress.ip_network("240.0.0.0/4"),       # reserved
+    ipaddress.ip_network("::1/128"),           # IPv6 loopback
+    ipaddress.ip_network("fc00::/7"),          # IPv6 unique local
+    ipaddress.ip_network("fe80::/10"),         # IPv6 link-local
+    ipaddress.ip_network("::ffff:0:0/96"),     # IPv4-mapped IPv6
 ]
 
 
@@ -93,8 +101,13 @@ async def link_preview(
                 validated_url,
                 headers=headers,
             )
+            # Validate the final URL after any redirects (open redirect SSRF)
+            if str(response.url) != validated_url:
+                _validate_url(str(response.url))
             response.raise_for_status()
             content = response.text[:MAX_RESPONSE_SIZE]
+    except HTTPException:
+        raise
     except httpx.TimeoutException:
         raise HTTPException(status_code=504, detail="URL timed out.")
     except httpx.HTTPError:

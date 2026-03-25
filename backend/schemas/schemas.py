@@ -3,7 +3,7 @@ All_Chat - Pydantic Schemas
 Request/response validation for all API endpoints.
 """
 
-from pydantic import BaseModel, EmailStr, field_validator, model_validator, HttpUrl
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator, HttpUrl
 from typing import Optional
 from datetime import datetime
 import re
@@ -82,7 +82,15 @@ class UserPublic(BaseModel):
     bio_markdown: Optional[str]
     avatar_path: Optional[str]
     created_at: datetime
-    pq_public_key: Optional[str]  # for DM key exchange
+    # pq_public_key intentionally omitted from general profile responses
+    # It is only returned via GET /api/users/{username} when needed for DM setup
+
+    model_config = {"from_attributes": True}
+
+
+class UserPublicWithKey(UserPublic):
+    """Extended public profile that includes the PQ key — only used for DM setup."""
+    pq_public_key: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
@@ -96,8 +104,8 @@ class UserPrivate(UserPublic):
 
 
 class UpdateProfileRequest(BaseModel):
-    display_name: Optional[str] = None
-    bio_markdown: Optional[str] = None
+    display_name: Optional[str] = Field(None, max_length=64)
+    bio_markdown:  Optional[str] = Field(None, max_length=5000)
 
     @field_validator("display_name")
     @classmethod
@@ -231,11 +239,11 @@ class VoteResponse(BaseModel):
 # ─── Messages ────────────────────────────────────────────────────────────────
 
 class SendMessageRequest(BaseModel):
-    recipient_username: str
-    kyber_ciphertext: str   # base64: encapsulated shared secret
-    aes_ciphertext: str     # base64: encrypted message
-    aes_nonce: str          # base64: 12-byte nonce
-    crypto_version: str = "kyber768-aes256gcm"
+    recipient_username: str     = Field(..., max_length=32)
+    kyber_ciphertext: str       = Field(..., max_length=4096)   # Kyber768 CT ~1568 bytes b64
+    aes_ciphertext: str         = Field(..., max_length=65536)  # max ~48KB message
+    aes_nonce: str              = Field(..., max_length=32)     # 12-byte nonce b64 = 16 chars
+    crypto_version: str         = Field("kyber768-aes256gcm", max_length=32)
 
 
 class MessageResponse(BaseModel):

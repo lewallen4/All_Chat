@@ -34,14 +34,21 @@ async def get_redis() -> redis.Redis:
 
 
 ROUTE_LIMITS = {
-    "/api/auth/login":           (10,  60),
-    "/api/auth/register":        (5,   60),
-    "/api/auth/resend-verify":   (3,  300),
-    "/api/auth/forgot-password": (3,  300),
-    "/api/posts":                (30,  60),
-    "/api/messages":             (60,  60),
-    "/api/votes":                (120, 60),
-    "/api/search":               (30,  60),
+    "/api/auth/login":               (10,  60),
+    "/api/auth/register":            (5,   60),
+    "/api/auth/resend-verify":       (3,  300),
+    "/api/auth/forgot-password":     (3,  300),
+    "/api/auth/reset-password":      (5,  300),
+    "/api/posts":                    (30,  60),
+    "/api/messages":                 (60,  60),
+    "/api/votes":                    (120, 60),
+    "/api/search":                   (30,  60),
+    "/api/social/comments":          (30,  60),   # 30 comments/minute max
+    "/api/social/follow":            (20,  60),
+    "/api/social/bookmarks":         (30,  60),
+    "/api/social/notifications":     (30,  60),
+    "/api/channels":                 (20,  60),
+    "/api/admin":                    (60,  60),   # admin actions rate limited too
 }
 DEFAULT_LIMIT = (settings.RATE_LIMIT_GLOBAL, 60)
 

@@ -85,6 +85,16 @@ const Profile = (() => {
       // Load and display channel roles
       _renderChannelRoles(username);
 
+      // 2FA section
+      const twoFAWrap = document.createElement('div');
+      twoFAWrap.id = 'twoFASection';
+      const profileMain = document.querySelector('.profile-bio') || document.querySelector('.card');
+      if (profileMain?.parentNode) {
+        profileMain.parentNode.appendChild(twoFAWrap);
+        twoFAWrap.innerHTML = Auth.render2FASection(user);
+        Auth.bind2FASection();
+      }
+
       // DM button
       document.getElementById('dmBtn')?.addEventListener('click', () => {
         Router.navigate('/messages');

@@ -45,3 +45,10 @@ python-dotenv==1.0.1
 
 # Post-quantum (optional — requires liboqs C library)
 # liboqs-python==0.11.0
+
+# Two-factor authentication (TOTP — Google Authenticator compatible)
+pyotp==2.9.0
+qrcode[pil]==7.4.2
+
+# Dependency security audit (installed by setup.sh, used by audit_deps.sh)
+pip-audit>=2.7.0

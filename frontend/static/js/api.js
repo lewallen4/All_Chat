@@ -5,19 +5,25 @@
  *   - Transparent token refresh on 401
  *   - JSON / FormData support
  *   - Error normalization
+ *
+ * Security note: Access tokens are stored in sessionStorage (tab-scoped,
+ * cleared when tab closes) rather than localStorage (persistent).
+ * Refresh tokens are stored in localStorage with rotation on every use.
+ * For maximum security, move to httpOnly cookies — requires backend changes
+ * to set Set-Cookie headers on login and accept Cookie header for auth.
  */
 
 const API = (() => {
   const BASE = '/api';
 
-  function getAccessToken()  { return localStorage.getItem('ac_access'); }
-  function getRefreshToken() { return localStorage.getItem('ac_refresh'); }
+  function getAccessToken()  { return sessionStorage.getItem('ac_access'); }
+  function getRefreshToken() { return localStorage.getItem('ac_refresh'); }  // refresh stays in localStorage intentionally (survives tab close)
   function setTokens(access, refresh) {
-    localStorage.setItem('ac_access',  access);
+    sessionStorage.setItem('ac_access', access);  // sessionStorage: cleared when tab closes
     if (refresh) localStorage.setItem('ac_refresh', refresh);
   }
   function clearTokens() {
-    localStorage.removeItem('ac_access');
+    sessionStorage.removeItem('ac_access');
     localStorage.removeItem('ac_refresh');
   }
 
@@ -103,6 +109,7 @@ const API = (() => {
 
     setTokens,
     clearTokens,
+    logoutFromServer,
     getAccessToken,
     getRefreshToken,
     isLoggedIn: () => !!getAccessToken(),

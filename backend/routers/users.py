@@ -16,10 +16,10 @@ from PIL import Image
 from core.database import get_db
 from core.deps import get_current_user
 from core.config import settings
-from core.security import sanitize_text
+from core.security import sanitize_text, sanitize_html, validate_image_magic
 from core.crypto import encode_b64, decode_b64
 from models.user import User
-from schemas.schemas import UserPublic, UserPrivate, UpdateProfileRequest, RegisterPublicKeyRequest, MessageOut
+from schemas.schemas import UserPublic, UserPublicWithKey, UserPrivate, UpdateProfileRequest, RegisterPublicKeyRequest, MessageOut
 
 router = APIRouter()
 
@@ -31,7 +31,7 @@ async def get_me(current_user: User = Depends(get_current_user)):
     return current_user
 
 
-@router.get("/{username}", response_model=UserPublic)
+@router.get("/{username}", response_model=UserPublicWithKey)
 async def get_user_profile(username: str, db: AsyncSession = Depends(get_db)):
     clean_username = sanitize_text(username).lower()
     result = await db.execute(select(User).where(User.username == clean_username))
@@ -48,9 +48,10 @@ async def update_profile(
     db: AsyncSession = Depends(get_db),
 ):
     if req.display_name is not None:
-        current_user.display_name = req.display_name
+        current_user.display_name = sanitize_text(req.display_name)[:64]
     if req.bio_markdown is not None:
-        current_user.bio_markdown = req.bio_markdown
+        # Sanitise bio — allow safe markdown-like content but strip dangerous HTML
+        current_user.bio_markdown = sanitize_html(req.bio_markdown)[:2000]
     await db.flush()
     return current_user
 
@@ -61,15 +62,14 @@ async def upload_avatar(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    # Validate MIME type
-    if file.content_type not in ALLOWED_IMAGE_TYPES:
-        raise HTTPException(status_code=400, detail="Only JPEG, PNG, WebP, or GIF images allowed.")
-
     content = await file.read()
 
-    # Enforce size limit
+    # Enforce size limit before any processing
     if len(content) > settings.MAX_IMAGE_SIZE_BYTES:
         raise HTTPException(status_code=400, detail="Image must be under 5MB.")
+
+    # Validate actual file magic bytes — never trust Content-Type header
+    validate_image_magic(content)
 
     # Validate and process image with Pillow (strips EXIF, enforces dimensions)
     try:
@@ -98,9 +98,16 @@ async def upload_avatar(
 
     # Delete old avatar
     if current_user.avatar_path:
-        old_path = Path(settings.MEDIA_DIR) / "avatars" / Path(current_user.avatar_path).name
-        if old_path.exists():
-            old_path.unlink()
+        # Sanitise: only take the filename, never allow path traversal
+        safe_name = Path(current_user.avatar_path).name
+        old_path  = Path(settings.MEDIA_DIR) / "avatars" / safe_name
+        # Verify the resolved path stays within the media directory
+        try:
+            old_path.resolve().relative_to(Path(settings.MEDIA_DIR).resolve())
+            if old_path.exists():
+                old_path.unlink()
+        except ValueError:
+            pass  # path traversal attempt — silently skip
 
     # Save new avatar
     avatars_dir = Path(settings.MEDIA_DIR) / "avatars"

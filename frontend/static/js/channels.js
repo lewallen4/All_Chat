@@ -493,7 +493,7 @@ const Channels = (() => {
         </div>
       </div>
       <div style="display:flex;gap:0.5rem;justify-content:flex-end;">
-        <button class="btn btn-ghost" onclick="UI.closeModal()">Cancel</button>
+        <button class="btn btn-ghost" data-action="close-modal">Cancel</button>
         <button class="btn btn-primary" id="editChSave">Save Changes</button>
       </div>`);
 
@@ -554,7 +554,7 @@ const Channels = (() => {
         <input type="text" id="leadTitle" placeholder="e.g. Moderator, News Bot" maxlength="64" />
       </div>
       <div style="display:flex;gap:0.5rem;justify-content:flex-end;">
-        <button class="btn btn-ghost" onclick="UI.closeModal()">Cancel</button>
+        <button class="btn btn-ghost" data-action="close-modal">Cancel</button>
         <button class="btn btn-primary" id="setLeadBtn">Apply</button>
       </div>`);
 
@@ -615,7 +615,7 @@ const Channels = (() => {
         <input type="text" id="banReason" placeholder="e.g. Repeated spam" maxlength="200" />
       </div>
       <div style="display:flex;gap:0.5rem;justify-content:flex-end;">
-        <button class="btn btn-ghost" onclick="UI.closeModal()">Cancel</button>
+        <button class="btn btn-ghost" data-action="close-modal">Cancel</button>
         <button class="btn btn-danger" id="doBanBtn">Ban User</button>
       </div>`);
 
@@ -652,7 +652,7 @@ const Channels = (() => {
         <input type="text" id="transferUsername" placeholder="their_username" autocomplete="off" />
       </div>
       <div style="display:flex;gap:0.5rem;justify-content:flex-end;">
-        <button class="btn btn-ghost" onclick="UI.closeModal()">Cancel</button>
+        <button class="btn btn-ghost" data-action="close-modal">Cancel</button>
         <button class="btn btn-danger" id="doTransferBtn">Transfer</button>
       </div>`);
 
@@ -699,7 +699,7 @@ const Channels = (() => {
         Make private (members only)
       </label>
       <div style="display:flex;gap:0.5rem;justify-content:flex-end;">
-        <button class="btn btn-ghost" onclick="UI.closeModal()">Cancel</button>
+        <button class="btn btn-ghost" data-action="close-modal">Cancel</button>
         <button class="btn btn-primary" id="doCreateCh">Create Channel</button>
       </div>`);
 

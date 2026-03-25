@@ -74,6 +74,7 @@ async def search(
         fb = await db.execute(
             _sel(Post.id).where(
                 Post.is_deleted == False,
+                _post_channel_filter,
                 Post.title.ilike(f"%{clean_q}%") | Post.body.ilike(f"%{clean_q}%")
             ).limit(page_size).offset(offset)
         )

@@ -32,7 +32,7 @@ from PIL import Image
 from core.database import get_db
 from core.deps import get_current_user, get_current_user_optional
 from core.config import settings
-from core.security import sanitize_text, sanitize_html
+from core.security import sanitize_text, sanitize_html, validate_image_magic
 from models.user import User
 from models.post import Post
 from models.vote import Vote
@@ -764,12 +764,11 @@ async def upload_channel_banner(
 
 async def _save_channel_image(file: UploadFile, subdir: str,
                                max_width: int = 500, max_height: int = 500) -> str:
-    allowed = {"image/jpeg", "image/png", "image/webp"}
-    if file.content_type not in allowed:
-        raise HTTPException(400, "Only JPEG, PNG, or WebP images allowed.")
     content = await file.read()
     if len(content) > settings.MAX_IMAGE_SIZE_BYTES:
         raise HTTPException(400, "Image must be under 5MB.")
+    # Validate actual file magic bytes — never trust Content-Type header
+    validate_image_magic(content)
     try:
         img = Image.open(io.BytesIO(content))
         img.verify()

@@ -16,7 +16,7 @@ from PIL import Image
 from core.database import get_db
 from core.deps import get_current_user, get_current_user_optional
 from core.config import settings
-from core.security import sanitize_text, sanitize_html
+from core.security import sanitize_text, sanitize_html, validate_image_magic
 from models.user import User
 from models.post import Post
 from models.vote import Vote
@@ -58,11 +58,11 @@ async def create_post(
     # Handle image upload
     image_path = None
     if image:
-        if image.content_type not in ALLOWED_IMAGE_TYPES:
-            raise HTTPException(status_code=400, detail="Only JPEG, PNG, WebP, or GIF allowed.")
         content = await image.read()
         if len(content) > MAX_POST_IMAGE_SIZE:
             raise HTTPException(status_code=400, detail="Image must be under 10MB.")
+        # Validate file magic bytes — never trust Content-Type header
+        validate_image_magic(content)
         try:
             img = Image.open(io.BytesIO(content))
             img.verify()

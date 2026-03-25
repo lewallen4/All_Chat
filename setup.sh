@@ -207,9 +207,17 @@ sed -i 's/^# bind 127.0.0.1 ::1/bind 127.0.0.1/' "$REDIS_CONF" 2>/dev/null || tr
 sed -i 's/^bind 127.0.0.1 ::1/bind 127.0.0.1/'   "$REDIS_CONF" 2>/dev/null || true
 grep -q "^maxmemory "        "$REDIS_CONF" || echo "maxmemory 128mb"             >> "$REDIS_CONF"
 grep -q "^maxmemory-policy " "$REDIS_CONF" || echo "maxmemory-policy allkeys-lru">> "$REDIS_CONF"
+
+# Set Redis password for local security
+REDIS_PASSWORD=$(openssl rand -hex 32)
+grep -q "^requirepass " "$REDIS_CONF" &&     sed -i "s/^requirepass .*/requirepass $REDIS_PASSWORD/" "$REDIS_CONF" ||     echo "requirepass $REDIS_PASSWORD" >> "$REDIS_CONF"
+
 systemctl enable redis-server --now
 systemctl restart redis-server
-success "Redis running"
+success "Redis running (password protected)"
+
+# Store Redis password in secrets file (updated after DB_PASSWORD below)
+echo "REDIS_PASSWORD=${REDIS_PASSWORD}" >> /root/.allchat_secrets 2>/dev/null || true
 
 # ── Step 5: Nginx ──────────────────────────────────────────────────────────────
 section "Nginx"
@@ -346,7 +354,7 @@ python3 -m venv "$APP_DIR/venv"
 "$APP_DIR/venv/bin/pip" install --upgrade pip wheel setuptools -q
 
 # Install these explicitly first — they must exist before requirements.txt
-"$APP_DIR/venv/bin/pip" install greenlet jinja2 -q
+"$APP_DIR/venv/bin/pip" install greenlet jinja2 pyotp qrcode -q
 
 "$APP_DIR/venv/bin/pip" install -r "$APP_DIR/backend/requirements.txt" -q
 success "Python dependencies installed"
@@ -418,7 +426,7 @@ DEBUG=false
 SECRET_KEY=${SECRET_KEY}
 
 DATABASE_URL=postgresql+asyncpg://${DB_USER}:${DB_PASSWORD}@localhost:5432/${DB_NAME}
-REDIS_URL=redis://localhost:6379/0
+REDIS_URL=redis://:${REDIS_PASSWORD}@localhost:6379/0
 
 SMTP_HOST=${SMTP_HOST}
 SMTP_PORT=${SMTP_PORT}
@@ -559,7 +567,34 @@ else
     info "Install manually later: apt-get install -y ufw"
 fi
 
-# ── Step 17: fail2ban ──────────────────────────────────────────────────────────
+# ── Step 17: Dependency Audit Cron ────────────────────────────────────────────
+section "Dependency Security Audit"
+
+# Install pip-audit into the venv
+"$APP_DIR/venv/bin/pip" install pip-audit -q && success "pip-audit installed" || warn "pip-audit install failed — skipping"
+
+# Copy the audit script
+cp "$SCRIPT_DIR/scripts/audit_deps.sh" "$APP_DIR/scripts/audit_deps.sh"
+chmod +x "$APP_DIR/scripts/audit_deps.sh"
+
+# Install weekly cron: 4:00 AM every Wednesday
+CRON_LINE="0 4 * * 3 root $APP_DIR/scripts/audit_deps.sh >> /var/log/allchat_audit.log 2>&1"
+CRON_FILE="/etc/cron.d/allchat-audit"
+
+if ! grep -q "audit_deps" "$CRON_FILE" 2>/dev/null; then
+    echo "$CRON_LINE" > "$CRON_FILE"
+    chmod 644 "$CRON_FILE"
+    success "Dependency audit cron installed (4am every Wednesday)"
+else
+    info "Dependency audit cron already installed"
+fi
+
+# Create log file with correct permissions
+touch /var/log/allchat_audit.log
+chmod 640 /var/log/allchat_audit.log
+success "Audit log: /var/log/allchat_audit.log"
+
+# ── Step 18: fail2ban ──────────────────────────────────────────────────────────
 section "fail2ban"
 cat > /etc/fail2ban/jail.d/allchat.conf << 'F2B'
 [nginx-limit-req]
@@ -571,6 +606,13 @@ findtime = 600
 bantime  = 7200
 maxretry = 10
 
+[nginx-http-auth]
+enabled  = true
+filter   = nginx-http-auth
+logpath  = /var/log/nginx/allchat_error.log
+maxretry = 5
+bantime  = 3600
+
 [sshd]
 enabled  = true
 port     = ssh
@@ -578,6 +620,7 @@ filter   = sshd
 logpath  = /var/log/auth.log
 maxretry = 3
 bantime  = 86400
+findtime = 3600
 F2B
 systemctl enable fail2ban --now
 systemctl restart fail2ban
